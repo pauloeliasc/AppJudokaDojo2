@@ -1,0 +1,112 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Basic user authentication and role mapping",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "professor", "student"] },
+        "username": { "type": "string" }
+      },
+      "required": ["uid", "role", "username"]
+    },
+    "Profile": {
+      "title": "Profile",
+      "description": "Detailed member information for students and general info for others",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string" },
+        "birthDate": { "type": "string", "format": "date" },
+        "enrollmentDate": { "type": "string", "format": "date" },
+        "lastPromotionDate": { "type": "string", "format": "date" },
+        "currentGrade": { "type": "string" },
+        "medications": { "type": "string" },
+        "healthInsurance": { "type": "string" },
+        "bloodType": { "type": "string" },
+        "conditions": { "type": "string" },
+        "points": { "type": "number" },
+        "role": { "type": "string" },
+        "callNumber": { "type": "string" },
+        "isStudent": { "type": "boolean" }
+      },
+      "required": ["fullName", "role"]
+    },
+    "Class": {
+      "title": "Class",
+      "description": "A scheduled training session",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "professorId": { "type": "string" },
+        "maxStudents": { "type": "number" }
+      },
+      "required": ["title", "date", "professorId"]
+    },
+    "Presence": {
+      "title": "Presence",
+      "description": "Record of a student attending a class",
+      "type": "object",
+      "properties": {
+        "memberId": { "type": "string" },
+        "classId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "pointsAwarded": { "type": "number" }
+      },
+      "required": ["memberId", "classId", "timestamp"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Monthly payment record",
+      "type": "object",
+      "properties": {
+        "memberId": { "type": "string" },
+        "month": { "type": "number" },
+        "year": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "paid"] },
+        "pixTimestamp": { "type": "string", "format": "date-time" },
+        "dueDate": { "type": "string", "format": "date" }
+      },
+      "required": ["memberId", "month", "year", "status"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Global application configuration",
+      "type": "object",
+      "properties": {
+        "pixKey": { "type": "string" },
+        "monthlyValue": { "type": "number" },
+        "defaultDueDate": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User account documents"
+    },
+    "/profiles/{profileId}": {
+      "schema": "Profile",
+      "description": "Profile data for all members"
+    },
+    "/classes/{classId}": {
+      "schema": "Class",
+      "description": "Training sessions"
+    },
+    "/classes/{classId}/presences/{presenceId}": {
+      "schema": "Presence",
+      "description": "Attendance list for a class"
+    },
+    "/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Payment tracking"
+    },
+    "settings/global": {
+      "schema": "Settings",
+      "description": "Global settings"
+    }
+  }
+}

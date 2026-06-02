@@ -1,0 +1,169 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email != null && (
+          request.auth.token.email.matches('(?i)^pauloeliasc@gmail\\.com$') || 
+          request.auth.token.email.matches('(?i)^judokadojoosasco@gmail\\.com$')
+        )) ||
+        (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('role', '') == 'admin')
+      );
+    }
+
+    function isProfessor() {
+      return isSignedIn() && (
+        (request.auth.token.email != null && (
+          request.auth.token.email.matches('(?i)^pauloeliasc@gmail\\.com$') || 
+          request.auth.token.email.matches('(?i)^judokadojoosasco@gmail\\.com$')
+         )) ||
+        (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) && 
+         (get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('role', '') == 'professor' || 
+          get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('role', '') == 'admin'))
+      );
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isMyProfile(profileId) {
+      return isSignedIn() && (
+        profileId == request.auth.uid || 
+        (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('id', '') == profileId) ||
+        (exists(/databases/$(database)/documents/profiles/$(profileId)) && (
+          get(/databases/$(database)/documents/profiles/$(profileId)).data.get('userId', '') == request.auth.uid ||
+          get(/databases/$(database)/documents/profiles/$(profileId)).data.get('responsibleId', '') == request.auth.uid ||
+          (request.auth.token.email != null && get(/databases/$(database)/documents/profiles/$(profileId)).data.get('email', '').lower() == request.auth.token.email.lower())
+        ))
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Validation Helpers ---
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['role']) &&
+             data.role in ['admin', 'professor', 'student', 'responsible'];
+    }
+
+    function isValidProfile(data) {
+      return data.keys().hasAll(['fullName', 'role']) &&
+             data.fullName is string && data.fullName.size() <= 200 &&
+             data.role in ['admin', 'professor', 'student', 'responsible'];
+    }
+
+    function isValidClass(data) {
+      return data.keys().hasAll(['title', 'date', 'professorId']) &&
+             data.title is string && data.title.size() <= 100 &&
+             data.date is string && 
+             data.professorId is string;
+    }
+
+    function isValidPresence(data) {
+      return data.keys().hasAll(['memberId', 'classId', 'timestamp', 'checkInDate']) &&
+             data.memberId is string &&
+             data.classId is string &&
+             data.checkInDate is string;
+    }
+
+    function isValidPayment(data) {
+      return data.keys().hasAll(['memberId', 'month', 'year', 'status']) &&
+             data.memberId is string &&
+             data.month is int && data.month >= 1 && data.month <= 12 &&
+             data.year is int &&
+             data.status in ['pending', 'paid'];
+    }
+
+
+    function isValidSchedule(data) {
+      return data.keys().hasAll(['dayOfWeek', 'time', 'type', 'professorId']) &&
+             data.dayOfWeek is int && data.dayOfWeek >= 0 && data.dayOfWeek <= 6 &&
+             data.time is string &&
+             data.professorId is string;
+    }
+
+
+    // --- Match Rules ---
+
+    match /schedule/{scheduleId} {
+      allow read: if isSignedIn();
+      allow create, update: if isProfessor() && isValidSchedule(incoming());
+      allow delete: if isProfessor();
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isValidUser(incoming());
+      allow update: if (isAdmin() || isOwner(userId)) && isValidUser(incoming());
+    }
+
+    match /profiles/{profileId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create, update: if isSignedIn() && (isMyProfile(profileId) || isProfessor());
+      allow delete: if isAdmin();
+    }
+
+    match /classes/{classId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidClass(incoming());
+      allow update: if isProfessor() && isValidClass(incoming());
+      allow delete: if isProfessor();
+    }
+
+    match /{path=**}/presences/{presenceId} {
+      allow list: if isSignedIn() && (isProfessor() || isMyProfile(resource.data.memberId));
+      allow get: if isSignedIn();
+      allow create, update: if (isProfessor() || isMyProfile(incoming().memberId)) && isValidPresence(incoming());
+      allow delete: if isProfessor() || isMyProfile(presenceId) || (resource != null && isMyProfile(resource.data.get('memberId', '')));
+    }
+
+    match /payments/{paymentId} {
+      allow list: if isProfessor() || (isSignedIn() && isMyProfile(resource.data.memberId));
+      allow get: if isProfessor() || (isSignedIn() && isMyProfile(resource.data.memberId));
+      allow create, update: if (isProfessor() || (isSignedIn() && isMyProfile(incoming().memberId))) && isValidPayment(incoming());
+      allow delete: if isProfessor();
+    }
+
+    match /settings/global {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /biometric_credentials/{credentialId} {
+      // Public get for login lookup (safe as credentialId is random/strong)
+      allow get: if true;
+      // Creation and management only for the owner
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+  }
+}
