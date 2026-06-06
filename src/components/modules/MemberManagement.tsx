@@ -34,7 +34,7 @@ export default function MemberManagement({ profiles, payments = [] }: { profiles
   const inactiveProfiles = profiles.filter(p => p.status === 'inactive' || p.status === 'blocked');
 
   const filtered = (view === 'active' ? activeProfiles : (view === 'pending' ? pendingProfiles : inactiveProfiles))
-    .filter(p => (p.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()))
+    .filter(p => (p.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()) || (p.email || '').toLowerCase().includes(searchTerm.toLowerCase()))
     .filter(p => {
       if (roleFilter === 'all') return true;
       if (roleFilter === 'student') return !p.role || p.role === UserRole.STUDENT;
@@ -102,7 +102,7 @@ export default function MemberManagement({ profiles, payments = [] }: { profiles
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
         <input 
           type="text"
-          placeholder="Buscar aluno por nome..."
+          placeholder="Buscar aluno por nome ou e-mail..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full bg-white border border-slate-200 rounded-xl py-3.5 pl-12 pr-4 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none text-base shadow-sm"
@@ -118,7 +118,7 @@ export default function MemberManagement({ profiles, payments = [] }: { profiles
         ].map(roleItem => {
           let count = 0;
           const baseList = view === 'active' ? activeProfiles : (view === 'pending' ? pendingProfiles : inactiveProfiles);
-          const filteredBySearch = baseList.filter(p => (p.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()));
+          const filteredBySearch = baseList.filter(p => (p.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()) || (p.email || '').toLowerCase().includes(searchTerm.toLowerCase()));
           
           if (roleItem.id === 'all') count = filteredBySearch.length;
           else if (roleItem.id === 'student') count = filteredBySearch.filter(p => !p.role || p.role === UserRole.STUDENT).length;
@@ -613,6 +613,7 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
   // Custom alert and confirmation dialog states for MemberModal scope
   const [modalAlert, setModalAlert] = useState<{ text: string, type: 'success' | 'error', onClose?: () => void } | null>(null);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [showConfirmDuplicateEmail, setShowConfirmDuplicateEmail] = useState(false);
 
   const handleResetPassword = async () => {
     if (!profile?.email) return;
@@ -651,23 +652,10 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (loading) return;
+  const performSubmit = async () => {
     setLoading(true);
     try {
       const normalizedEmail = formData.email ? formData.email.trim().toLowerCase() : '';
-
-      // Check if email already exists in profiles (only if email is provided and it is a new profile)
-      if (!profile?.id && normalizedEmail) {
-        const q = query(collection(db, 'profiles'), where('email', '==', normalizedEmail));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          setModalAlert({ text: 'Um membro com este e-mail já está cadastrado.', type: 'error' });
-          setLoading(false);
-          return;
-        }
-      }
 
       const submissionData = { ...formData, email: normalizedEmail };
       if (!submissionData.email) delete (submissionData as any).email;
@@ -745,6 +733,28 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loading) return;
+
+    const normalizedEmail = formData.email ? formData.email.trim().toLowerCase() : '';
+    if (normalizedEmail && (!profile?.email || profile.email.toLowerCase() !== normalizedEmail)) {
+      try {
+        const q = query(collection(db, 'profiles'), where('email', '==', normalizedEmail));
+        const querySnapshot = await getDocs(q);
+        const existingDocs = querySnapshot.docs.filter(d => d.id !== profile?.id);
+        if (existingDocs.length > 0) {
+          setShowConfirmDuplicateEmail(true);
+          return;
+        }
+      } catch (err) {
+        console.error("Error checking duplicate email:", err);
+      }
+    }
+
+    await performSubmit();
   };
 
   const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
@@ -1151,6 +1161,39 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
           </div>
         </form>
       </motion.div>
+
+      {showConfirmDuplicateEmail && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex flex-col justify-center items-center p-6 z-[200] text-center text-white">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col items-center">
+            <Users className="w-12 h-12 text-indigo-500 mb-4 animate-bounce" />
+            <h5 className="font-extrabold text-base uppercase tracking-wider mb-2 text-white">E-mail já cadastrado!</h5>
+            <p className="text-xs text-slate-300 mb-6 leading-relaxed">
+              O e-mail <strong>{formData.email}</strong> já está cadastrado para outro aluno (por exemplo, pai/mãe ou irmão).
+              <br /><br />
+              Deseja <strong>vincular este novo aluno ao mesmo e-mail</strong> para que eles compartilhem o login em família?
+            </p>
+            <div className="flex gap-3 w-full">
+              <button 
+                type="button"
+                onClick={() => setShowConfirmDuplicateEmail(false)}
+                className="flex-1 bg-white/10 hover:bg-white/20 text-white rounded-xl py-3 text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button 
+                type="button"
+                onClick={async () => {
+                  setShowConfirmDuplicateEmail(false);
+                  await performSubmit();
+                }}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3 text-xs font-bold transition-all cursor-pointer shadow-lg shadow-indigo-600/20"
+              >
+                Sim, Vincular
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showConfirmDelete && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex flex-col justify-center items-center p-6 z-[200] text-center text-white">

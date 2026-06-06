@@ -15,7 +15,8 @@ import {
   ShieldAlert, 
   Plus, 
   Globe,
-  ShieldCheck
+  ShieldCheck,
+  Link2
 } from 'lucide-react';
 import { createStudentAccount, deleteStudentAccount } from '../../services/adminService';
 
@@ -139,6 +140,50 @@ export default function FirebaseSyncModal({ profiles, onClose }: FirebaseSyncMod
     } catch (err: any) {
       console.error(err);
       setError(`Erro ao criar conta Auth para ${email}: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLinkAllFamily = async (email: string, items: Profile[]) => {
+    setLoading(true);
+    setStatusMessage(`Vinculando perfis do e-mail ${email} em uma única conta de família...`);
+    setError('');
+
+    try {
+      // Find one items with a valid userId (if any)
+      let actualUid = items.map(p => p.userId).find(uid => !!uid && uid !== 'linked_temp');
+
+      if (!actualUid) {
+        // If none of them has a userId, create an Auth account for the first profile in the list
+        const res = await createStudentAccount(email, items[0].id);
+        if (res && res.uid) {
+          actualUid = res.uid;
+        }
+      }
+
+      if (!actualUid) {
+        throw new Error("Não foi possível gerar ou obter uma credencial de autenticação única.");
+      }
+
+      // Update all profiles sharing this email to have the same userId
+      const batch = writeBatch(db);
+      for (const item of items) {
+        const docRef = doc(db, 'profiles', item.id);
+        batch.update(docRef, { userId: actualUid });
+      }
+      await batch.commit();
+
+      setStatusMessage(`Sucesso! Todos os perfis com o e-mail ${email} foram vinculados.`);
+      
+      // Update local state to trigger recalculations in the sync component
+      setLocalProfiles(prev => 
+        prev.map(p => p.email?.trim().toLowerCase() === email.trim().toLowerCase() ? { ...p, userId: actualUid! } : p)
+      );
+
+    } catch (err: any) {
+      console.error(err);
+      setError(`Erro ao vincular conta de família: ${err.message || 'Erro desconhecido'}`);
     } finally {
       setLoading(false);
     }
@@ -284,25 +329,34 @@ export default function FirebaseSyncModal({ profiles, onClose }: FirebaseSyncMod
             <div className="space-y-4">
               <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
                 <AlertTriangle className="w-5 h-5 text-amber-500" />
-                <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">E-mails Compartilhados (Duplicados)</h4>
+                <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">E-mails Compartilhados (Múltiplos Perfis / Família)</h4>
               </div>
-              <p className="text-xs text-slate-500 font-medium">
-                Quando múltiplos perfis usam o mesmo e-mail, o sistema não consegue determinar qual aluno está acessando o aplicativo. É altamento recomendado excluir as fichas obsoletas ou alterar os endereços de e-mail.
+              <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                Múltiplos alunos estão usando o mesmo e-mail (por exemplo, irmãos ou filhos que usam o e-mail do pai/mãe). O sistema agora suporta logins de família unificados! Você pode vincular todos eles ao mesmo login unificado de acesso ou, se preferir, excluir fichas obsoletas.
               </p>
 
               <div className="space-y-3">
                 {duplicates.map((dup, index) => (
                   <div key={index} className="p-5 border border-slate-150 bg-slate-50/50 rounded-2xl space-y-3">
-                    <span className="text-xs font-black font-mono text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full inline-block">
-                      {dup.email}
-                    </span>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <span className="text-xs font-black font-mono text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full inline-block">
+                        {dup.email}
+                      </span>
+                      <button
+                        onClick={() => handleLinkAllFamily(dup.email, dup.items)}
+                        disabled={loading}
+                        className="text-[10px] font-black uppercase tracking-wider text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-4 py-2 rounded-xl transition-all self-start sm:self-center flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                      >
+                        <Link2 className="w-3.5 h-3.5" /> Vincular Todos (Acesso Família)
+                      </button>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {dup.items.map((it) => (
                         <div key={it.id} className="bg-white p-4 rounded-xl border border-slate-100 flex items-center justify-between shadow-sm">
                           <div>
                             <span className="text-xs font-bold text-slate-800 block leading-tight">{it.fullName}</span>
                             <span className="text-[9px] font-bold text-slate-400 block uppercase tracking-wide mt-1">
-                              Status: {it.status || 'active'} | Graduação: {it.currentGrade}
+                              Status: {it.status || 'active'} | Graduação: {it.currentGrade} | ID de Acesso: {it.userId ? (it.userId === 'linked_temp' ? 'Vinculado' : it.userId.slice(0, 8) + '...') : 'Não Vinculado'}
                             </span>
                           </div>
                           <button

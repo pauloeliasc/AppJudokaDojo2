@@ -31,6 +31,7 @@ export interface Profile {
   emergencyContact?: string;
   address?: string;
   points: number;
+  photoUrl?: string;
   role: UserRole;
   userId?: string; 
   isApproved: boolean;

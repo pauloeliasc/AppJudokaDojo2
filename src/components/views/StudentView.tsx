@@ -3,7 +3,7 @@ import { db, auth, doc } from '../../lib/firebase';
 import { updateEmail } from 'firebase/auth';
 import { collection, query, onSnapshot, where, collectionGroup, orderBy } from 'firebase/firestore';
 import { Profile, ClassSession, Payment, Settings, Schedule, ClassType, Presence } from '../../types';
-import { Trophy, Wallet, UserCircle, Calendar, CheckCircle2, AlertCircle, Copy, Clock, Star, Activity, Loader2 } from 'lucide-react';
+import { Trophy, Wallet, UserCircle, Calendar, CheckCircle2, AlertCircle, Copy, Clock, Star, Activity, Loader2, Gift } from 'lucide-react';
 import { cn, formatDate, getMonthName } from '../../lib/utils';
 import { QRCodeSVG } from 'qrcode.react';
 import GraduationView from './GraduationView';
@@ -22,6 +22,7 @@ export default function StudentView({ activeTab, setActiveTab, forcedProfile }: 
   const [settings, setSettings] = useState<Settings | null>(null);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [userPresenceList, setUserPresenceList] = useState<Presence[]>([]);
+  const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
 
   useEffect(() => {
     if (!auth.currentUser || (!user && !forcedProfile)) return;
@@ -49,6 +50,10 @@ export default function StudentView({ activeTab, setActiveTab, forcedProfile }: 
       setSchedules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Schedule)));
     });
 
+    const unsubAllProfiles = onSnapshot(collection(db, 'profiles'), (snapshot) => {
+      setAllProfiles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Profile)));
+    });
+
     // Fetch user presences
     const unsubPresences = onSnapshot(
       query(collectionGroup(db, 'presences'), where('memberId', '==', profileId), orderBy('timestamp', 'desc')),
@@ -63,11 +68,12 @@ export default function StudentView({ activeTab, setActiveTab, forcedProfile }: 
       unsubPayments();
       unsubSettings();
       unsubSchedules();
+      unsubAllProfiles();
       unsubPresences();
     };
   }, [user, forcedProfile?.id]);
 
-  if (activeTab === 'home') return <StudentHome profile={profile} classes={classes} payments={payments} schedules={schedules} presences={userPresenceList} />;
+  if (activeTab === 'home') return <StudentHome profile={profile} classes={classes} payments={payments} schedules={schedules} presences={userPresenceList} allProfiles={allProfiles} />;
   if (activeTab === 'profile') return <StudentProfile profile={profile} />;
   if (activeTab === 'graduation') return <GraduationView />;
   if (activeTab === 'payments') return <StudentPayments profile={profile} payments={payments} settings={settings} />;
@@ -78,7 +84,7 @@ export default function StudentView({ activeTab, setActiveTab, forcedProfile }: 
   return <div>Em breve: {activeTab}</div>;
 }
 
-function StudentHome({ profile, classes, payments, schedules, presences }: { profile: Profile | null, classes: ClassSession[], payments: Payment[], schedules: Schedule[], presences: Presence[] }) {
+function StudentHome({ profile, classes, payments, schedules, presences, allProfiles }: { profile: Profile | null, classes: ClassSession[], payments: Payment[], schedules: Schedule[], presences: Presence[], allProfiles: Profile[] }) {
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
   const payment = payments.find(p => p.month === currentMonth && p.year === currentYear);
@@ -86,6 +92,40 @@ function StudentHome({ profile, classes, payments, schedules, presences }: { pro
 
   const totalCheckIns = presences.length;
   const uniqueDays = new Set(presences.map(p => p.checkInDate || p.timestamp.split('T')[0])).size;
+
+  const birthdayPeople = (allProfiles || []).filter(p => {
+    if (!p.birthDate || p.status === 'inactive' || p.status === 'blocked' || p.isPointer) return false;
+    
+    try {
+      const parts = p.birthDate.split('-');
+      if (parts.length !== 3) return false;
+      const birthMonth = parseInt(parts[1], 10) - 1;
+      const birthDay = parseInt(parts[2], 10);
+      
+      const today = new Date();
+      // Start of current week (Sunday)
+      const currentWeekStart = new Date(today);
+      currentWeekStart.setDate(today.getDate() - today.getDay());
+      currentWeekStart.setHours(0,0,0,0);
+      
+      // End of current week (Saturday)
+      const currentWeekEnd = new Date(currentWeekStart);
+      currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
+      currentWeekEnd.setHours(23,59,59,999);
+      
+      const bdayThisYear = new Date(today.getFullYear(), birthMonth, birthDay);
+      if (bdayThisYear >= currentWeekStart && bdayThisYear <= currentWeekEnd) return true;
+      
+      const bdayNextYear = new Date(today.getFullYear() + 1, birthMonth, birthDay);
+      if (bdayNextYear >= currentWeekStart && bdayNextYear <= currentWeekEnd) return true;
+      
+      const bdayPrevYear = new Date(today.getFullYear() - 1, birthMonth, birthDay);
+      if (bdayPrevYear >= currentWeekStart && bdayPrevYear <= currentWeekEnd) return true;
+    } catch (e) {
+      console.warn("Date parse error for birthday check:", e);
+    }
+    return false;
+  });
 
   return (
     <div className="space-y-10">
@@ -186,6 +226,55 @@ function StudentHome({ profile, classes, payments, schedules, presences }: { pro
             )}
           </div>
         </div>
+      </div>
+
+      {/* Secção de Aniversariantes da Semana */}
+      <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center text-violet-600 shrink-0">
+            <Gift className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="font-extrabold text-lg text-slate-900 leading-tight">Aniversariantes da Semana 🎉🎂</h3>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Parabenize seus colegas de tatame nesta semana!</p>
+          </div>
+        </div>
+
+        {birthdayPeople.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {birthdayPeople.map((bMember) => {
+              let birthdayDateStr = '';
+              try {
+                const parts = bMember.birthDate.split('-');
+                if (parts.length === 3) {
+                  birthdayDateStr = `${parts[2]}/${parts[1]}`;
+                }
+              } catch (e) {}
+
+              return (
+                <div key={bMember.id} className="flex items-center gap-4 p-4 bg-violet-50/40 border border-violet-100 rounded-2xl group hover:border-violet-200 transition-all">
+                  <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold overflow-hidden border-2 border-white shadow-sm shrink-0">
+                    {bMember.photoUrl ? (
+                      <img src={bMember.photoUrl} alt={bMember.fullName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      bMember.fullName?.charAt(0) || '?'
+                    )}
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-bold text-slate-800 text-sm truncate">{bMember.fullName}</span>
+                    <span className="text-[10px] font-bold text-violet-600 uppercase tracking-widest mt-1">
+                      Dia: {birthdayDateStr} 🥳
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 text-center">
+            <p className="text-slate-400 text-xs italic">Nenhum aniversário de aluno nesta semana. Foco nos treinos!</p>
+          </div>
+        )}
       </div>
     </div>
   );
