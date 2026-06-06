@@ -33,7 +33,9 @@ export default function ProfessorView({ activeTab, setActiveTab }: { activeTab: 
     });
 
     const unsubProfiles = onSnapshot(collection(db, 'profiles'), (snapshot) => {
-      setProfiles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Profile)));
+      setProfiles(snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Profile))
+        .filter(p => !p.isPointer));
     });
 
     const unsubPayments = onSnapshot(collection(db, 'payments'), (snapshot) => {
@@ -76,7 +78,7 @@ export default function ProfessorView({ activeTab, setActiveTab }: { activeTab: 
 }
 
 function ProfessorHome({ profiles, classes, schedules, profile }: { profiles: Profile[], classes: ClassSession[], schedules: Schedule[], profile: Profile | null }) {
-  const totalStudents = profiles.filter(p => !p.role || p.role === UserRole.STUDENT || (p.role === UserRole.RESPONSIBLE && p.isStudent)).length;
+  const totalStudents = profiles.filter(p => !p.role || p.role === UserRole.STUDENT).length;
 
   return (
     <div className="space-y-10">
@@ -84,7 +86,7 @@ function ProfessorHome({ profiles, classes, schedules, profile }: { profiles: Pr
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-200 overflow-hidden shrink-0">
             <img 
-              src="/logo.png" 
+              src="./logo.png" 
               alt="Judoka Dojô" 
               className="w-12 h-12 object-contain"
               referrerPolicy="no-referrer"

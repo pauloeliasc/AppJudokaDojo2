@@ -1,8 +1,7 @@
 export enum UserRole {
   ADMIN = 'admin',
   PROFESSOR = 'professor',
-  STUDENT = 'student',
-  RESPONSIBLE = 'responsible'
+  STUDENT = 'student'
 }
 
 export interface User {
@@ -13,7 +12,7 @@ export interface User {
   role: UserRole;
   username: string;
   isApproved: boolean;
-  status: 'active' | 'pending' | 'blocked';
+  status: 'active' | 'pending' | 'blocked' | 'inactive';
 }
 
 export interface Profile {
@@ -35,10 +34,14 @@ export interface Profile {
   role: UserRole;
   userId?: string; 
   isApproved: boolean;
-  status: 'active' | 'pending' | 'blocked';
+  status: 'active' | 'pending' | 'blocked' | 'inactive';
+  responsibleName?: string; // Name of a parent or guardian
+  responsiblePhone?: string; // Phone number of the parent/guardian
+  responsibleEmail?: string; // Email of the parent/guardian
   responsibleId?: string; // ID of the responsible profile for this student
   callNumber?: string; // Student roll call number
   isStudent?: boolean; // Responsible profile can also be a student too
+  isPointer?: boolean; // Indicates if this profile is just a pointer reference
 }
 
 export enum ClassType {

@@ -94,8 +94,12 @@ export const profilesApi = {
       return;
     }
     const path = `profiles/${profile.id}`;
+    const dataToSave = { ...profile };
+    if (dataToSave.email) {
+      dataToSave.email = dataToSave.email.trim().toLowerCase();
+    }
     try {
-      await setDoc(doc(db, 'profiles', profile.id), profile, { merge: true });
+      await setDoc(doc(db, 'profiles', profile.id), dataToSave, { merge: true });
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, path);
     }
@@ -107,8 +111,12 @@ export const profilesApi = {
       return;
     }
     const path = `profiles/${id}`;
+    const dataToUpdate = { ...data };
+    if (dataToUpdate.email) {
+      dataToUpdate.email = dataToUpdate.email.trim().toLowerCase();
+    }
     try {
-      await updateDoc(doc(db, 'profiles', id), data);
+      await updateDoc(doc(db, 'profiles', id), dataToUpdate);
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, path);
     }

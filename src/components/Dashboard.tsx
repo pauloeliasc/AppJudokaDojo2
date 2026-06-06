@@ -10,7 +10,6 @@ import { Home, Users, Calendar, Wallet, Trophy, UserCircle, GraduationCap, FileT
 import { cn } from '../lib/utils';
 
 import ProfileView from './views/ProfileView';
-import ResponsibleView from './views/ResponsibleView';
 import PWAInstallPrompt from './modules/PWAInstallPrompt';
 import EventsView from './views/EventsView';
 
@@ -21,17 +20,18 @@ export default function Dashboard() {
   if (!user) return null;
 
   const items = [
-    { id: 'home', icon: Home, label: 'Início', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT, UserRole.RESPONSIBLE] },
-    { id: 'events', icon: Megaphone, label: 'Mural de Eventos', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT, UserRole.RESPONSIBLE] },
+    { id: 'home', icon: Home, label: 'Início', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT] },
+    { id: 'events', icon: Megaphone, label: 'Mural de Eventos', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT] },
     { id: 'members', icon: Users, label: 'Alunos', roles: [UserRole.ADMIN, UserRole.PROFESSOR] },
+    { id: 'family', icon: Users, label: 'Minha Família', roles: [UserRole.STUDENT] },
     { id: 'finance', icon: Wallet, label: 'Financeiro', roles: [UserRole.ADMIN] },
     { id: 'classes', icon: Calendar, label: 'Agenda', roles: [UserRole.ADMIN, UserRole.PROFESSOR] },
     { id: 'reports', icon: FileText, label: 'Relatórios', roles: [UserRole.ADMIN, UserRole.PROFESSOR] },
-    { id: 'profile', icon: UserCircle, label: 'Dados Pessoais', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT, UserRole.RESPONSIBLE] },
-    { id: 'payments', icon: Wallet, label: 'Pagamentos', roles: [UserRole.STUDENT, UserRole.RESPONSIBLE] },
-    { id: 'history', icon: Clock, label: 'Histórico', roles: [UserRole.STUDENT, UserRole.RESPONSIBLE] },
-    { id: 'graduation', icon: GraduationCap, label: 'Exame de Faixa', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT, UserRole.RESPONSIBLE] },
-    { id: 'ranking', icon: Trophy, label: 'Ranking', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT, UserRole.RESPONSIBLE] },
+    { id: 'profile', icon: UserCircle, label: 'Dados Pessoais', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT] },
+    { id: 'payments', icon: Wallet, label: 'Pagamentos', roles: [UserRole.STUDENT] },
+    { id: 'history', icon: Clock, label: 'Histórico', roles: [UserRole.STUDENT] },
+    { id: 'graduation', icon: GraduationCap, label: 'Exame de Faixa', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT] },
+    { id: 'ranking', icon: Trophy, label: 'Ranking', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT] },
   ];
 
   const bottomNavItems = items.filter(item => item.roles.includes(user.role)).slice(0, 5);
@@ -47,8 +47,6 @@ export default function Dashboard() {
         return <ProfessorView activeTab={activeTab} setActiveTab={setActiveTab} />;
       case UserRole.STUDENT:
         return <StudentView activeTab={activeTab} setActiveTab={setActiveTab} />;
-      case UserRole.RESPONSIBLE:
-        return <ResponsibleView activeTab={activeTab} setActiveTab={setActiveTab} />;
       default:
         return <div className="p-8">Acesso não autorizado.</div>;
     }

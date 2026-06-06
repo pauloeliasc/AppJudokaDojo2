@@ -98,7 +98,7 @@ export default function PWAInstallPrompt() {
         <div className="flex flex-col md:flex-row items-center gap-6">
           <div className="w-16 h-16 rounded-2xl bg-white border border-slate-700 shrink-0 flex items-center justify-center shadow-md overflow-hidden">
             <img 
-              src="/logo.png" 
+              src="./logo.png" 
               alt="Judoka Dojô" 
               className="w-14 h-14 object-contain rounded-xl"
               referrerPolicy="no-referrer"
@@ -142,7 +142,7 @@ export default function PWAInstallPrompt() {
             <div className="flex flex-col items-center text-center space-y-4 mb-6">
               <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center p-1 border border-slate-700 shadow-md">
                 <img 
-                  src="/logo.png" 
+                  src="./logo.png" 
                   alt="Judoka Dojô" 
                   className="w-14 h-14 object-contain rounded-xl"
                   referrerPolicy="no-referrer"

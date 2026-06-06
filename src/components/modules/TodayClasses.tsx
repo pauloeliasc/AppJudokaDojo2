@@ -51,14 +51,15 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
     return unsub;
   }, [profile, dateStr]);
 
-  // Fetch all profiles for mapping names in admin view
+  // Fetch all profiles for mapping names in check-in panel
   useEffect(() => {
-    if (!isAdminOrProfessor) return;
     const unsub = onSnapshot(collection(db, 'profiles'), (snapshot) => {
-      setAllProfiles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Profile)));
+      setAllProfiles(snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Profile))
+        .filter(p => !p.isPointer));
     });
     return unsub;
-  }, [isAdminOrProfessor]);
+  }, []);
 
   // Fetch counts and full list for all classes today
   const [presenceCounts, setPresenceCounts] = useState<Record<string, number>>({});
@@ -267,7 +268,7 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
         })}
       </div>
 
-      {isAdminOrProfessor && allTodayPresences.length > 0 && (
+      {allTodayPresences.length > 0 && (
         <div className="mt-12 border-t border-slate-100 pt-10">
           <div className="flex items-center gap-3 mb-8">
             <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
@@ -283,12 +284,12 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {allTodayPresences.map((p) => {
+            {allTodayPresences.map((p, idx) => {
               const studentProfile = allProfiles.find(prof => prof.id === p.memberId);
               const classData = classes.find(c => c.id === p.classId);
               
               return (
-                <div key={p.id} className="flex items-center gap-4 p-4 bg-slate-50 border border-slate-100 rounded-2xl group hover:border-emerald-200 hover:bg-white transition-all">
+                <div key={`${p.id}-${p.classId || idx}`} className="flex items-center gap-4 p-4 bg-slate-50 border border-slate-100 rounded-2xl group hover:border-emerald-200 hover:bg-white transition-all">
                   <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold overflow-hidden border-2 border-white shadow-sm">
                     {studentProfile?.photoUrl ? (
                       <img src={studentProfile.photoUrl} alt={studentProfile.fullName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />

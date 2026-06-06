@@ -32,7 +32,9 @@ export default function AdminView({ activeTab, setActiveTab }: { activeTab: stri
       if (doc.exists()) setProfile({ id: doc.id, ...doc.data() } as Profile);
     });
     const unsubProfiles = onSnapshot(collection(db, 'profiles'), (snapshot) => {
-      setProfiles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Profile)));
+      setProfiles(snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Profile))
+        .filter(p => !p.isPointer));
     }, (error) => {
       console.error("Profiles snapshot error:", error);
     });
@@ -84,9 +86,8 @@ function AdminHome({ profiles, classes, payments, schedules, profile }: { profil
   const pendingPayments = payments.filter(p => p.status === 'pending').length;
   
   const activeProfiles = profiles.filter(p => !p.status || p.status === 'active');
-  const totalStudents = activeProfiles.filter(p => !p.role || p.role === UserRole.STUDENT || (p.role === UserRole.RESPONSIBLE && p.isStudent)).length;
+  const totalStudents = activeProfiles.filter(p => !p.role || p.role === UserRole.STUDENT).length;
   const totalProfessors = activeProfiles.filter(p => p.role === UserRole.PROFESSOR).length;
-  const totalResponsibles = activeProfiles.filter(p => p.role === UserRole.RESPONSIBLE).length;
   const totalAdmins = activeProfiles.filter(p => p.role === UserRole.ADMIN).length;
 
   return (
@@ -95,7 +96,7 @@ function AdminHome({ profiles, classes, payments, schedules, profile }: { profil
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-200 overflow-hidden shrink-0">
             <img 
-              src="/logo.png" 
+              src="./logo.png" 
               alt="Judoka Dojô" 
               className="w-12 h-12 object-contain"
               referrerPolicy="no-referrer"
@@ -127,7 +128,7 @@ function AdminHome({ profiles, classes, payments, schedules, profile }: { profil
               <p className="text-2xl font-bold text-slate-800 tracking-tight">{activeProfiles.length}</p>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100 text-[10px]">
+          <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 text-[10px]">
             <div className="flex justify-between items-center px-1">
               <span className="text-slate-400 font-semibold font-sans">Alunos</span>
               <span className="font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{totalStudents}</span>
@@ -135,10 +136,6 @@ function AdminHome({ profiles, classes, payments, schedules, profile }: { profil
             <div className="flex justify-between items-center px-1">
               <span className="text-slate-400 font-semibold font-sans">Profs</span>
               <span className="font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{totalProfessors}</span>
-            </div>
-            <div className="flex justify-between items-center px-1">
-              <span className="text-slate-400 font-semibold font-sans">Respons.</span>
-              <span className="font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{totalResponsibles}</span>
             </div>
             <div className="flex justify-between items-center px-1">
               <span className="text-slate-400 font-semibold font-sans">Admins</span>

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth, db, handleFirestoreError, OperationType, doc } from './lib/firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { getDoc, getDocFromCache, setDoc, collection, query, where, getDocs, getDocsFromCache, limit } from 'firebase/firestore';
+import { getDoc, getDocFromCache, setDoc, collection, query, where, getDocs, getDocsFromCache, limit, onSnapshot } from 'firebase/firestore';
 import { User, UserRole } from './types';
 import { profilesApi } from './services/firestoreService';
 
@@ -53,6 +53,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let data: any = profileDoc.exists() ? profileDoc.data() : null;
       let profileId = profileDoc.id;
 
+      if (data && data.isPointer && data.id) {
+        const realDoc = await safeGetDoc(doc(db, 'profiles', data.id));
+        if (realDoc.exists()) {
+          data = realDoc.data();
+          profileId = realDoc.id;
+        }
+      }
+
       // 2. If not found, try search by userId field (profiles created by admin then linked)
       if (!data) {
         const q = query(collection(db, 'profiles'), where('userId', '==', firebaseUser.uid), limit(1));
@@ -86,6 +94,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const isAdminEmail = email === 'pauloeliasc@gmail.com' || email === 'judokadojoosasco@gmail.com';
       
       if (data) {
+        if (isAdminEmail && (data.role !== 'admin' || !data.isApproved || data.status !== 'active')) {
+          try {
+            await profilesApi.update(profileId, {
+              role: UserRole.ADMIN,
+              isApproved: true,
+              status: 'active'
+            });
+            data.role = UserRole.ADMIN;
+            data.isApproved = true;
+            data.status = 'active';
+          } catch (updateErr) {
+            console.error("Failed to self-correct admin profile in database:", updateErr);
+          }
+        }
+
         if (profileId !== firebaseUser.uid) {
           try {
             const refDoc = doc(db, 'profiles', firebaseUser.uid);
@@ -94,7 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               uid: firebaseUser.uid,
               fullName: data.fullName || data.name || '',
               email: firebaseUser.email || '',
-              role: data.role || (isAdminEmail ? UserRole.ADMIN : UserRole.STUDENT),
+              role: isAdminEmail ? UserRole.ADMIN : (data.role || UserRole.STUDENT),
               isPointer: true,
               isApproved: isAdminEmail ? true : (data.isApproved ?? false),
               status: isAdminEmail ? 'active' : (data.status ?? 'pending')
@@ -109,7 +132,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: profileId,
           email: firebaseUser.email || '',
           name: data.fullName || data.name || data.username || email.split('@')[0],
-          role: data.role || (isAdminEmail ? UserRole.ADMIN : UserRole.STUDENT),
+          role: isAdminEmail ? UserRole.ADMIN : (data.role || UserRole.STUDENT),
           username: data.username || email.split('@')[0],
           isApproved: isAdminEmail ? true : (data.isApproved ?? false),
           status: isAdminEmail ? 'active' : (data.status ?? 'pending')
@@ -171,16 +194,106 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    let unsubscribeProfile: (() => void) | null = null;
+
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+        unsubscribeProfile = null;
+      }
+
       if (firebaseUser) {
-        fetchUserData(firebaseUser);
+        setLoading(true);
+        try {
+          // Resolve which profileId to listen to
+          let profileId = firebaseUser.uid;
+          let profileDoc = await safeGetDoc(doc(db, 'profiles', firebaseUser.uid));
+          let data: any = profileDoc.exists() ? profileDoc.data() : null;
+
+          if (data && data.isPointer && data.id) {
+            const realDoc = await safeGetDoc(doc(db, 'profiles', data.id));
+            if (realDoc.exists()) {
+              data = realDoc.data();
+              profileId = realDoc.id;
+            }
+          }
+
+          if (!data) {
+            const q = query(collection(db, 'profiles'), where('userId', '==', firebaseUser.uid), limit(1));
+            const querySnapshot = await safeGetDocs(q);
+            if (!querySnapshot.empty) {
+              const snapshot = querySnapshot.docs[0];
+              data = snapshot.data();
+              profileId = snapshot.id;
+            }
+          }
+
+          if (!data && firebaseUser.email) {
+            const q = query(collection(db, 'profiles'), where('email', '==', firebaseUser.email.toLowerCase()), limit(1));
+            const querySnapshot = await safeGetDocs(q);
+            if (!querySnapshot.empty) {
+              const snapshot = querySnapshot.docs[0];
+              data = snapshot.data();
+              profileId = snapshot.id;
+              try {
+                await profilesApi.update(profileId, { userId: firebaseUser.uid });
+              } catch (linkError) {
+                console.error("Failed to link profile with UID:", linkError);
+              }
+            }
+          }
+
+          const email = firebaseUser.email?.toLowerCase() || '';
+          const isAdminEmail = email === 'pauloeliasc@gmail.com' || email === 'judokadojoosasco@gmail.com';
+
+          // Set up real-time listener on the profile document page
+          unsubscribeProfile = onSnapshot(doc(db, 'profiles', profileId), (docSnapshot) => {
+            if (docSnapshot.exists()) {
+              const pData = docSnapshot.data();
+              setUser({
+                uid: firebaseUser.uid,
+                id: profileId,
+                email: firebaseUser.email || '',
+                name: pData.fullName || pData.name || pData.username || email.split('@')[0],
+                role: isAdminEmail ? UserRole.ADMIN : (pData.role || UserRole.STUDENT),
+                username: pData.username || email.split('@')[0],
+                isApproved: isAdminEmail ? true : (pData.isApproved ?? false),
+                status: isAdminEmail ? 'active' : (pData.status ?? 'pending')
+              });
+            } else {
+              setUser({
+                uid: firebaseUser.uid,
+                id: firebaseUser.uid,
+                email: firebaseUser.email || '',
+                name: firebaseUser.displayName || email.split('@')[0] || 'Usuário',
+                role: isAdminEmail ? UserRole.ADMIN : UserRole.STUDENT,
+                username: email.split('@')[0],
+                isApproved: isAdminEmail ? true : false,
+                status: isAdminEmail ? 'active' : 'pending'
+              });
+            }
+            setLoading(false);
+          }, (snapErr) => {
+            console.error("Firestore real-time subscription failed, using fallback:", snapErr);
+            fetchUserData(firebaseUser);
+          });
+
+        } catch (err) {
+          console.error("Failed to setup real-time profile sync:", err);
+          fetchUserData(firebaseUser);
+        }
       } else {
         setUser(null);
         setLoading(false);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+      }
+    };
   }, []);
 
   const logout = async () => {

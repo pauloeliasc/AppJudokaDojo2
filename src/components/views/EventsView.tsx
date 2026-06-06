@@ -27,6 +27,9 @@ export default function EventsView() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
+  
+  // Safe alert and delete states for iframes
+  const [showConfirmDeleteId, setShowConfirmDeleteId] = useState<string | null>(null);
 
   const canManage = user?.role === UserRole.ADMIN || user?.role === UserRole.PROFESSOR;
 
@@ -114,13 +117,11 @@ export default function EventsView() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Tem certeza de que deseja excluir este evento?')) {
-      try {
-        await eventsApi.delete(id);
-      } catch (err) {
-        console.error('Error deleting event:', err);
-      }
+  const handleDeleteReal = async (id: string) => {
+    try {
+      await eventsApi.delete(id);
+    } catch (err) {
+      console.error('Error deleting event:', err);
     }
   };
 
@@ -242,8 +243,8 @@ export default function EventsView() {
                     <Edit3 className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => handleDelete(event.id)}
-                    className="p-1.5 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 transition-all"
+                    onClick={() => setShowConfirmDeleteId(event.id)}
+                    className="p-1.5 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 transition-all cursor-pointer"
                     title="Excluir evento"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -371,6 +372,39 @@ export default function EventsView() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation overlay for iframe/safari compatibility */}
+      {showConfirmDeleteId && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex flex-col justify-center items-center p-6 z-[200] text-center text-white">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col items-center">
+            <Trash2 className="w-12 h-12 text-rose-500 mb-4 animate-bounce" />
+            <h5 className="font-extrabold text-base uppercase tracking-wider mb-2 text-white">Excluir Evento?</h5>
+            <p className="text-xs text-slate-300 mb-6 leading-relaxed">
+              Tem certeza de que deseja excluir permanentemente este evento do calendário? Esta ação é irreversível.
+            </p>
+            <div className="flex gap-3 w-full">
+              <button 
+                type="button"
+                onClick={() => setShowConfirmDeleteId(null)}
+                className="flex-1 bg-white/10 hover:bg-white/20 text-white rounded-xl py-3 text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button 
+                type="button"
+                onClick={async () => {
+                  const id = showConfirmDeleteId;
+                  setShowConfirmDeleteId(null);
+                  await handleDeleteReal(id);
+                }}
+                className="flex-1 bg-rose-500 hover:bg-rose-600 text-white rounded-xl py-3 text-xs font-bold transition-all cursor-pointer"
+              >
+                Excluir
+              </button>
+            </div>
           </div>
         </div>
       )}

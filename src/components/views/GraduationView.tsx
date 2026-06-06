@@ -24,7 +24,7 @@ export default function GraduationView() {
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-200 overflow-hidden shrink-0">
             <img 
-              src="/logo.png" 
+              src="./logo.png" 
               alt="Judoka Dojô" 
               className="w-12 h-12 object-contain"
               referrerPolicy="no-referrer"

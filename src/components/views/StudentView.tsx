@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { db, auth, doc } from '../../lib/firebase';
+import { updateEmail } from 'firebase/auth';
 import { collection, query, onSnapshot, where, collectionGroup, orderBy } from 'firebase/firestore';
 import { Profile, ClassSession, Payment, Settings, Schedule, ClassType, Presence } from '../../types';
 import { Trophy, Wallet, UserCircle, Calendar, CheckCircle2, AlertCircle, Copy, Clock, Star, Activity, Loader2 } from 'lucide-react';
@@ -7,6 +8,7 @@ import { cn, formatDate, getMonthName } from '../../lib/utils';
 import { QRCodeSVG } from 'qrcode.react';
 import GraduationView from './GraduationView';
 import StudentAchievements from './StudentAchievements';
+import FamilyManagement from './FamilyManagement';
 import { useAuth } from '../../AuthContext';
 import { profilesApi, classesApi, paymentsApi } from '../../services/firestoreService';
 import { setDoc, addDoc, deleteDoc } from 'firebase/firestore';
@@ -71,6 +73,7 @@ export default function StudentView({ activeTab, setActiveTab, forcedProfile }: 
   if (activeTab === 'payments') return <StudentPayments profile={profile} payments={payments} settings={settings} />;
   if (activeTab === 'ranking') return <StudentAchievements profileId={profile?.id} />;
   if (activeTab === 'history') return <FullPresenceHistory presences={userPresenceList} classes={classes} />;
+  if (activeTab === 'family') return <FamilyManagement />;
 
   return <div>Em breve: {activeTab}</div>;
 }
@@ -90,7 +93,7 @@ function StudentHome({ profile, classes, payments, schedules, presences }: { pro
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-200 overflow-hidden shrink-0">
             <img 
-              src="/logo.png" 
+              src="./logo.png" 
               alt="Judoka Dojô" 
               className="w-12 h-12 object-contain"
               referrerPolicy="no-referrer"
@@ -164,10 +167,10 @@ function StudentHome({ profile, classes, payments, schedules, presences }: { pro
           </div>
           <div className="space-y-3 flex-1 overflow-y-auto max-h-[200px] scrollbar-hide">
             {presences.length > 0 ? (
-              presences.slice(0, 10).map(p => {
+              presences.slice(0, 10).map((p, idx) => {
                 const classData = classes.find(c => c.id === p.classId);
                 return (
-                  <div key={p.id} className="p-4 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center group hover:border-indigo-200 transition-colors">
+                  <div key={`${p.id}-${p.classId || idx}`} className="p-4 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center group hover:border-indigo-200 transition-colors">
                     <div className="flex flex-col">
                       <span className="font-bold text-slate-700 text-sm">{classData?.title || 'Treino Geral'}</span>
                       <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-widest">{classData?.type || 'Treino'}</span>
@@ -238,10 +241,10 @@ function FullPresenceHistory({ presences, classes }: { presences: Presence[], cl
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map(p => {
+              {filtered.map((p, idx) => {
                 const c = classes.find(cl => cl.id === p.classId);
                 return (
-                  <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
+                  <tr key={`${p.id}-${p.classId || idx}`} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
                         <span className="font-bold text-slate-900 text-sm">{formatDate(p.timestamp)}</span>
@@ -295,9 +298,36 @@ function StudentProfile({ profile }: { profile: Profile | null }) {
     setLoading(true);
     setSaveMessage('');
     try {
-      await profilesApi.update(profile.id, formData);
-      setSaveMessage('Dados atualizados com sucesso!');
-      setTimeout(() => setSaveMessage(''), 3000);
+      const normalizedEmail = formData.email ? formData.email.trim().toLowerCase() : '';
+      
+      // Update Firebase Auth email if user is editing themselves and the email changed
+      const currentUser = auth.currentUser;
+      let emailUpdateWarning = '';
+
+      if (currentUser && currentUser.email && normalizedEmail && normalizedEmail !== currentUser.email.toLowerCase()) {
+        try {
+          await updateEmail(currentUser, normalizedEmail);
+        } catch (authError: any) {
+          console.warn('Failed to update login email via updateEmail directly in StudentView:', authError);
+          if (authError.code === 'auth/requires-recent-login') {
+            emailUpdateWarning = 'Seu e-mail foi atualizado no cadastro, mas para atualizar seu e-mail de login com segurança, o Firebase exige que você realize login recentemente. Por favor, faça logout e login novamente para aplicar a alteração de login.';
+          } else {
+            emailUpdateWarning = `Seu e-mail foi atualizado no cadastro, mas não conseguimos atualizar seu login do Firebase automaticamente: ${authError.message || 'Erro desconhecido'}`;
+          }
+        }
+      }
+
+      await profilesApi.update(profile.id, {
+        ...formData,
+        email: normalizedEmail || undefined
+      });
+
+      if (emailUpdateWarning) {
+        setSaveMessage(emailUpdateWarning);
+      } else {
+        setSaveMessage('Dados atualizados com sucesso!');
+        setTimeout(() => setSaveMessage(''), 3000);
+      }
     } catch (e: any) {
       console.error(e);
       setSaveMessage('Erro ao atualizar: ' + (e.message || 'Erro desconhecido'));

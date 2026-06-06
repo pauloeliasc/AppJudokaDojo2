@@ -13,17 +13,18 @@ interface SidebarProps {
 
 export default function Sidebar({ role, activeTab, setActiveTab, logout, userName }: SidebarProps) {
   const items = [
-    { id: 'home', icon: Home, label: 'Início', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT, UserRole.RESPONSIBLE] },
-    { id: 'events', icon: Megaphone, label: 'Mural de Eventos', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT, UserRole.RESPONSIBLE] },
+    { id: 'home', icon: Home, label: 'Início', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT] },
+    { id: 'events', icon: Megaphone, label: 'Mural de Eventos', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT] },
     { id: 'members', icon: Users, label: 'Alunos', roles: [UserRole.ADMIN, UserRole.PROFESSOR] },
+    { id: 'family', icon: Users, label: 'Minha Família', roles: [UserRole.STUDENT] },
     { id: 'finance', icon: Wallet, label: 'Financeiro', roles: [UserRole.ADMIN] },
     { id: 'classes', icon: Calendar, label: 'Agenda', roles: [UserRole.ADMIN, UserRole.PROFESSOR] },
     { id: 'reports', icon: FileText, label: 'Relatórios', roles: [UserRole.ADMIN, UserRole.PROFESSOR] },
-    { id: 'profile', icon: UserCircle, label: 'Dados Pessoais', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT, UserRole.RESPONSIBLE] },
-    { id: 'payments', icon: Wallet, label: 'Pagamentos', roles: [UserRole.STUDENT, UserRole.RESPONSIBLE] },
-    { id: 'history', icon: Clock, label: 'Histórico', roles: [UserRole.STUDENT, UserRole.RESPONSIBLE] },
-    { id: 'graduation', icon: GraduationCap, label: 'Exame de Faixa', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT, UserRole.RESPONSIBLE] },
-    { id: 'ranking', icon: Trophy, label: 'Conquistas', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT, UserRole.RESPONSIBLE] },
+    { id: 'profile', icon: UserCircle, label: 'Dados Pessoais', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT] },
+    { id: 'payments', icon: Wallet, label: 'Pagamentos', roles: [UserRole.STUDENT] },
+    { id: 'history', icon: Clock, label: 'Histórico', roles: [UserRole.STUDENT] },
+    { id: 'graduation', icon: GraduationCap, label: 'Exame de Faixa', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT] },
+    { id: 'ranking', icon: Trophy, label: 'Conquistas', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT] },
     { id: 'settings', icon: UserCircle, label: 'Configurações', roles: [UserRole.ADMIN] },
   ];
 
@@ -36,7 +37,7 @@ export default function Sidebar({ role, activeTab, setActiveTab, logout, userNam
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-md border border-slate-700/30 shrink-0 overflow-hidden">
               <img 
-                src="/logo.png" 
+                src="./logo.png" 
                 alt="Judoka Dojô" 
                 className="w-9 h-9 object-contain"
                 referrerPolicy="no-referrer"

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { auth, db, doc } from '../lib/firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, updateProfile } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, updateProfile, GoogleAuthProvider, OAuthProvider, signInWithPopup } from 'firebase/auth';
 import { setDoc, getDocs, collection, query, where } from 'firebase/firestore';
 import { UserRole } from '../types';
 import { motion } from 'motion/react';
-import { User as UserIcon, Lock, Shield, GraduationCap, Users, Fingerprint } from 'lucide-react';
+import { User as UserIcon, Lock, Shield, GraduationCap, Users, Fingerprint, Chrome, Mail, Globe } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { authenticateWithBiometrics, isBiometricsSupported, hasRegisteredBiometrics } from '../services/biometricService';
 import BiometricPrompt from './modules/BiometricPrompt';
@@ -26,6 +26,40 @@ export default function Login() {
     isBiometricsSupported().then(setBiometricSupported);
     setHasBiometrics(hasRegisteredBiometrics());
   }, []);
+
+  const handleSocialLogin = async (providerName: string) => {
+    setLoading(true);
+    setError('');
+    setMessage('');
+    try {
+      let provider;
+      if (providerName === 'google') {
+        provider = new GoogleAuthProvider();
+      } else if (providerName === 'microsoft') {
+        provider = new OAuthProvider('microsoft.com');
+      } else if (providerName === 'yahoo') {
+        provider = new OAuthProvider('yahoo.com');
+      } else {
+        throw new Error('Provedor não suportado');
+      }
+
+      const result = await signInWithPopup(auth, provider);
+      if (result.user) {
+        setMessage(`Conectado com sucesso como ${result.user.email}!`);
+      }
+    } catch (e: any) {
+      console.error(e);
+      if (e.code === 'auth/popup-closed-by-user') {
+        setError('O login foi cancelado porque a janela de autenticação foi fechada.');
+      } else if (e.code === 'auth/operation-not-allowed') {
+         setError(`Atenção: O login por '${providerName}' precisa estar ativado no console do seu Firebase na seção Authentication > Sign-in method.`);
+      } else {
+        setError(`Falha ao conectar com ${providerName}: ${e.message || 'Erro desconhecido'}`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleBiometricLogin = () => {
     setError('');
@@ -56,17 +90,44 @@ export default function Login() {
     setError('');
     setMessage('');
 
+    const emailLower = username.trim().toLowerCase();
+
     try {
-      await signInWithEmailAndPassword(auth, username, password);
+      await signInWithEmailAndPassword(auth, emailLower, password);
     } catch (e: any) {
-      console.error("Auth Error:", e);
+      console.log("Auth login attempt notice:", e.message || e);
       // In JS SDK v10+, the error object might have different structures depending on the environment
       const code = e.code || (e.message?.includes('auth/invalid-credential') ? 'auth/invalid-credential' : '');
       
       if (code === 'auth/operation-not-allowed') {
         setError('Erro: O provedor de E-mail/Senha não está ativo no Console do Firebase. Por favor, ative-o em Authentication > Sign-in method.');
       } else if (code === 'auth/invalid-credential' || code === 'auth/user-not-found' || code === 'auth/wrong-password') {
-        setError('E-mail ou senha incorretos. Se você for aluno e este for seu primeiro acesso, a senha padrão é 123456.');
+        // Fallback: This might be the user's first access (pre-registered profile or admin).
+        // Attempt on-the-fly registration with the entered password.
+        try {
+          const userCredential = await createUserWithEmailAndPassword(auth, emailLower, password);
+          if (userCredential.user) {
+            await updateProfile(userCredential.user, { displayName: emailLower.split('@')[0] });
+            setMessage('Seu primeiro acesso foi configurado e você foi conectado com sucesso!');
+            return;
+          }
+        } catch (createErr: any) {
+          console.error("Failed on-the-fly registration fallback:", createErr);
+          if (createErr.code === 'auth/email-already-in-use') {
+            if (emailLower === 'pauloeliasc@gmail.com') {
+              setError('Sua conta administrativa já existe no Firebase! Se você esqueceu a senha, clique em "Esqueceu a senha?" acima, ou use a opção fácil "Entrar com o Google" abaixo para acessar instantaneamente com sua conta.');
+            } else {
+              setError('E-mail ou senha incorretos. Caso tenha esquecido sua senha, por favor use a opção "Esqueceu a senha?" para redefini-la ou tente usar o botão "Entrar com o Google".');
+            }
+          } else if (createErr.code === 'auth/weak-password') {
+            setError('A senha deve ter pelo menos 6 caracteres se este for seu primeiro acesso.');
+          } else if (createErr.code === 'auth/invalid-email') {
+            setError('Por favor, insira um e-mail válido.');
+          } else {
+            setError('E-mail ou senha incorretos. Se você for aluno e este for seu primeiro acesso, a senha padrão é 123456.');
+          }
+          return;
+        }
       } else if (code === 'auth/invalid-email') {
         setError('Por favor, insira um e-mail válido.');
       } else if (code === 'auth/email-already-in-use') {
@@ -108,14 +169,14 @@ export default function Login() {
     }
 
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, username, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, username.trim().toLowerCase(), password);
       if (userCredential.user) {
         await updateProfile(userCredential.user, { displayName: fullName.trim() });
       }
-      setMessage('Sua conta foi criada com sucesso! Aguarde até que um administrador aprove seu acesso.');
+      setMessage('Sua conta foi criada com sucesso! Você já pode entrar no sistema.');
       setIsRegistering(false);
     } catch (e: any) {
-      console.error("Cadastro Error:", e);
+      console.log("Cadastro registration attempt notice:", e.message || e);
       const code = e.code || '';
       if (code === 'auth/email-already-in-use') {
         setError('Este e-mail já está em uso por outra conta.');
@@ -142,7 +203,7 @@ export default function Login() {
     setMessage('');
 
     try {
-      await sendPasswordResetEmail(auth, username);
+      await sendPasswordResetEmail(auth, username.trim().toLowerCase());
       setMessage('Link de redefinição enviado! Verifique sua caixa de entrada.');
     } catch (e: any) {
       if (e.code === 'auth/user-not-found') {
@@ -152,7 +213,7 @@ export default function Login() {
       } else {
         setError('Erro ao enviar e-mail: ' + (e.message || 'Erro desconhecido'));
       }
-      console.error(e);
+      console.log("Forgot password attempt notice:", e.message || e);
     } finally {
       setLoading(false);
     }
@@ -169,7 +230,7 @@ export default function Login() {
           <div className="flex justify-center mb-8">
             <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center shadow-xl border border-slate-100 overflow-hidden">
                <img 
-                 src="/logo.png" 
+                 src="./logo.png" 
                  alt="Judoka Dojô" 
                  className="w-22 h-22 object-contain"
                  referrerPolicy="no-referrer"
@@ -288,6 +349,8 @@ export default function Login() {
               {loading ? 'Processando...' : (isRegistering ? 'Criar Nova Conta' : 'Entrar no Sistema')}
             </button>
 
+
+
             <div className="text-center pt-2">
               <button
                 type="button"
@@ -308,7 +371,7 @@ export default function Login() {
                   type="button"
                   onClick={handleBiometricLogin}
                   disabled={loading}
-                  className="w-full bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 text-indigo-700 py-3.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                  className="w-full bg-indigo-50 border border-indigo-100 hover:bg-indigo-110 text-indigo-700 py-3.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
                   <Fingerprint className="w-4 h-4" />
                   Entrar com Biometria

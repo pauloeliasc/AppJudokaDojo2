@@ -1,10 +1,18 @@
+import React from 'react';
 import { AuthProvider, useAuth } from './AuthContext';
 import { auth } from './lib/firebase';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, refreshUser } = useAuth();
+  const [checking, setChecking] = React.useState(false);
+
+  const handleCheckApproval = async () => {
+    setChecking(true);
+    await refreshUser();
+    setChecking(false);
+  };
 
   if (loading) {
     return (
@@ -32,12 +40,21 @@ function AppContent() {
             <p className="text-slate-500 mt-2">Olá, {user.name}! Sua conta foi criada, mas ainda aguarda aprovação de um administrador.</p>
           </div>
           <p className="text-sm text-slate-400">Entre em contato com a academia para agilizar o processo.</p>
-          <button 
-            onClick={() => auth.signOut()}
-            className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98]"
-          >
-            Sair da Conta
-          </button>
+          <div className="flex flex-col gap-3">
+            <button 
+              onClick={handleCheckApproval}
+              disabled={checking}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
+            >
+              {checking ? 'Verificando...' : 'Verificar Aprovação'}
+            </button>
+            <button 
+              onClick={() => auth.signOut()}
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white py-4 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98]"
+            >
+              Sair da Conta
+            </button>
+          </div>
         </div>
       </div>
     );

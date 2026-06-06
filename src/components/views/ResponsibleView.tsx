@@ -37,17 +37,30 @@ export default function ResponsibleView({ activeTab, setActiveTab }: { activeTab
           ...selfProfile,
           fullName: `${selfProfile.fullName} (Você)`
         };
+        // Remove duplicates where the self ID is already in the list
+        mergedList = mergedList.filter(d => d.id !== selfProfile!.id);
         mergedList = [selfAsStudent, ...mergedList];
       }
-      setDependents(mergedList);
-      if (mergedList.length > 0 && !selectedStudentId) {
-        setSelectedStudentId(mergedList[0].id);
+      // Guarantee unique IDs across all items
+      const seenIds = new Set<string>();
+      const uniqueList: Profile[] = [];
+      for (const p of mergedList) {
+        if (!seenIds.has(p.id)) {
+          seenIds.add(p.id);
+          uniqueList.push(p);
+        }
+      }
+      setDependents(uniqueList);
+      if (uniqueList.length > 0 && !selectedStudentId) {
+        setSelectedStudentId(uniqueList[0].id);
       }
       setLoading(false);
     };
 
     const unsubDeps = onSnapshot(q, (snapshot) => {
-      dependentsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Profile));
+      dependentsList = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Profile))
+        .filter(p => !p.isPointer); // Filter out pointer profiles to prevent duplication
       handleStatesUpdate();
     });
 

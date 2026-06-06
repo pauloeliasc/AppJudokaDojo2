@@ -2,33 +2,43 @@ import React, { useState } from 'react';
 import { Profile, UserRole, Payment } from '../../types';
 import { db, handleFirestoreError, OperationType, doc } from '../../lib/firebase';
 import { deleteDoc, collection, addDoc, query, where, getDocs, setDoc } from 'firebase/firestore';
-import { Plus, Search, UserPlus, Trash2, Edit2, ShieldAlert, Users, LayoutDashboard, CreditCard, CheckCircle2, XCircle } from 'lucide-react';
+import { Plus, Search, UserPlus, Trash2, Edit2, ShieldAlert, Users, LayoutDashboard, CreditCard, CheckCircle2, XCircle, RefreshCw, AlertTriangle, UserCheck, ShieldCheck, UserX, Trash } from 'lucide-react';
 import { cn, formatDate } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { profilesApi, paymentsApi } from '../../services/firestoreService';
 import MemberDetailsModal from './MemberDetailsModal';
+import FirebaseSyncModal from './FirebaseSyncModal';
 
 export default function MemberManagement({ profiles, payments = [] }: { profiles: Profile[], payments?: Payment[] }) {
   const { user: currentUser } = useAuth();
+  const emailCounts: Record<string, number> = {};
+  profiles.forEach(p => {
+    if (p.email) {
+      const emailLower = p.email.trim().toLowerCase();
+      emailCounts[emailLower] = (emailCounts[emailLower] || 0) + 1;
+    }
+  });
   const isAdminUser = currentUser?.role === UserRole.ADMIN;
+  const isAdminOrProfessor = isAdminUser || currentUser?.role === UserRole.PROFESSOR;
 
   const [isAdding, setIsAdding] = useState(false);
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const [viewingDetails, setViewingDetails] = useState<Profile | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [view, setView] = useState<'active' | 'pending'>('active');
-  const [roleFilter, setRoleFilter] = useState<'all' | 'student' | 'professor' | 'responsible' | 'admin'>('all');
+  const [view, setView] = useState<'active' | 'pending' | 'inactive'>('active');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'student' | 'professor' | 'admin'>('all');
+  const [showSyncModal, setShowSyncModal] = useState(false);
 
   const activeProfiles = profiles.filter(p => !p.status || p.status === 'active');
   const pendingProfiles = profiles.filter(p => p.status === 'pending');
+  const inactiveProfiles = profiles.filter(p => p.status === 'inactive' || p.status === 'blocked');
 
-  const filtered = (view === 'active' ? activeProfiles : pendingProfiles)
+  const filtered = (view === 'active' ? activeProfiles : (view === 'pending' ? pendingProfiles : inactiveProfiles))
     .filter(p => (p.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()))
     .filter(p => {
       if (roleFilter === 'all') return true;
-      if (roleFilter === 'student') return !p.role || p.role === UserRole.STUDENT || (p.role === UserRole.RESPONSIBLE && p.isStudent);
+      if (roleFilter === 'student') return !p.role || p.role === UserRole.STUDENT;
       if (roleFilter === 'professor') return p.role === UserRole.PROFESSOR;
-      if (roleFilter === 'responsible') return p.role === UserRole.RESPONSIBLE;
       if (roleFilter === 'admin') return p.role === UserRole.ADMIN;
       return true;
     });
@@ -57,15 +67,35 @@ export default function MemberManagement({ profiles, payments = [] }: { profiles
             >
               Pendentes ({pendingProfiles.length})
             </button>
+            <button 
+              onClick={() => setView('inactive')}
+              className={cn(
+                "px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-widest transition-all",
+                view === 'inactive' ? "bg-rose-500 text-white" : "bg-slate-100 text-slate-400 hover:text-slate-600"
+              )}
+            >
+              Inativos ({inactiveProfiles.length})
+            </button>
           </div>
         </div>
-        <button 
-          onClick={() => setIsAdding(true)}
-          className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-sm self-start"
-        >
-          <UserPlus className="w-4 h-4" />
-          <span>Novo Aluno</span>
-        </button>
+        <div className="flex gap-2 self-start">
+          {isAdminOrProfessor && (
+            <button 
+              onClick={() => setShowSyncModal(true)}
+              className="bg-white text-indigo-700 border border-indigo-200 px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm cursor-pointer"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>Sincronizar Firebase</span>
+            </button>
+          )}
+          <button 
+            onClick={() => setIsAdding(true)}
+            className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-sm cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Novo Aluno</span>
+          </button>
+        </div>
       </div>
 
       <div className="relative">
@@ -84,17 +114,15 @@ export default function MemberManagement({ profiles, payments = [] }: { profiles
           { id: 'all', label: 'Todos os Membros' },
           { id: 'student', label: 'Alunos' },
           { id: 'professor', label: 'Professores' },
-          { id: 'responsible', label: 'Responsáveis' },
           { id: 'admin', label: 'Administradores' }
         ].map(roleItem => {
           let count = 0;
-          const baseList = view === 'active' ? activeProfiles : pendingProfiles;
+          const baseList = view === 'active' ? activeProfiles : (view === 'pending' ? pendingProfiles : inactiveProfiles);
           const filteredBySearch = baseList.filter(p => (p.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()));
           
           if (roleItem.id === 'all') count = filteredBySearch.length;
-          else if (roleItem.id === 'student') count = filteredBySearch.filter(p => !p.role || p.role === UserRole.STUDENT || (p.role === UserRole.RESPONSIBLE && p.isStudent)).length;
+          else if (roleItem.id === 'student') count = filteredBySearch.filter(p => !p.role || p.role === UserRole.STUDENT).length;
           else if (roleItem.id === 'professor') count = filteredBySearch.filter(p => p.role === UserRole.PROFESSOR).length;
-          else if (roleItem.id === 'responsible') count = filteredBySearch.filter(p => p.role === UserRole.RESPONSIBLE).length;
           else if (roleItem.id === 'admin') count = filteredBySearch.filter(p => p.role === UserRole.ADMIN).length;
 
           return (
@@ -129,6 +157,7 @@ export default function MemberManagement({ profiles, payments = [] }: { profiles
               payments={payments.filter(p => p.memberId === profile.id)}
               onEdit={() => setEditingProfile(profile)} 
               onViewDetails={() => setViewingDetails(profile)}
+              emailCounts={emailCounts}
             />
           ))}
         </div>
@@ -158,6 +187,12 @@ export default function MemberManagement({ profiles, payments = [] }: { profiles
             onClose={() => setViewingDetails(null)} 
           />
         )}
+        {showSyncModal && (
+          <FirebaseSyncModal 
+            profiles={profiles}
+            onClose={() => setShowSyncModal(false)}
+          />
+        )}
       </AnimatePresence>
     </div>
   );
@@ -166,7 +201,7 @@ export default function MemberManagement({ profiles, payments = [] }: { profiles
 import { createStudentAccount, deleteStudentAccount, updateStudentEmail, resetStudentPassword, sendStudentPasswordReset } from '../../services/adminService';
 import { Mail, CheckCircle, Loader2 } from 'lucide-react';
 
-function MemberCard({ profile, payments, onEdit, onViewDetails }: { profile: Profile, payments: Payment[], onEdit: () => void, onViewDetails: () => void, key?: string }) {
+function MemberCard({ profile, payments, onEdit, onViewDetails, emailCounts }: { profile: Profile, payments: Payment[], onEdit: () => void, onViewDetails: () => void, emailCounts?: Record<string, number>, key?: string }) {
   const { user: currentUser } = useAuth();
   const isAdminUser = currentUser?.role === UserRole.ADMIN;
   const isAdminOrProfessor = isAdminUser || currentUser?.role === UserRole.PROFESSOR;
@@ -176,7 +211,13 @@ function MemberCard({ profile, payments, onEdit, onViewDetails }: { profile: Pro
   const [isTogglingPayment, setIsTogglingPayment] = useState(false);
   const [accountStatus, setAccountStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
-  const currentMonth = new Date().getMonth();
+  // Custom confirmation and alert overlays for the cross-origin iframe environment
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmApprove, setConfirmApprove] = useState<UserRole | null>(null);
+  const [confirmCreateAccount, setConfirmCreateAccount] = useState(false);
+  const [alertMsg, setAlertMsg] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
+
+  const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
   const currentPayment = payments.find(p => p.month === currentMonth && p.year === currentYear);
   const isPaid = currentPayment?.status === 'paid';
@@ -193,90 +234,192 @@ function MemberCard({ profile, payments, onEdit, onViewDetails }: { profile: Pro
           month: currentMonth,
           year: currentYear,
           status: 'paid',
-          dueDate: new Date(currentYear, currentMonth + 1, 5).toISOString().split('T')[0]
+          dueDate: new Date(currentYear, currentMonth, 5).toISOString().split('T')[0]
         };
         await paymentsApi.create(newPayment);
       }
     } catch (e) {
       console.error(e);
-      alert('Erro ao atualizar status de pagamento.');
+      setAlertMsg({ text: 'Erro ao atualizar status de pagamento.', type: 'error' });
     } finally {
       setIsTogglingPayment(false);
     }
   };
 
-  const handleDelete = async () => {
-    if (confirm(`Tem certeza que deseja remover ${profile.fullName}? Esta ação também tentará excluir a conta de login (se a senha for a padrão).`)) {
-      setIsDeleting(true);
-      try {
-        // Try to delete auth account first if email exists
-        if (profile.email) {
-          await deleteStudentAccount(profile.email);
-        }
-        
-        // Delete firestore profile
-        await deleteDoc(doc(db, 'profiles', profile.id));
-      } catch (e) {
-        handleFirestoreError(e, OperationType.DELETE, `profiles/${profile.id}`);
-      } finally {
-        setIsDeleting(false);
+  const handleDeleteReal = async () => {
+    setIsDeleting(true);
+    try {
+      // Try to delete auth account first if email exists
+      if (profile.email) {
+        await deleteStudentAccount(profile.email);
       }
+      
+      // Delete firestore profile
+      await deleteDoc(doc(db, 'profiles', profile.id));
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, `profiles/${profile.id}`);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
-  const handleCreateAccount = async () => {
+  const handleCreateAccountStart = () => {
     if (!profile.email) {
-      alert('O aluno deve ter um e-mail cadastrado para criar o acesso.');
+      setAlertMsg({ text: 'O aluno deve ter um e-mail cadastrado para criar o acesso.', type: 'error' });
       return;
     }
-    
-    if (confirm(`Deseja criar um acesso para ${profile.fullName} com a senha 123456?`)) {
-      setIsCreatingAccount(true);
-      setAccountStatus('loading');
-      try {
-        await createStudentAccount(profile.email, profile.id);
-        setAccountStatus('success');
-        setTimeout(() => setAccountStatus('idle'), 3000);
-      } catch (e: any) {
-        console.error(e);
-        let msg = 'Erro ao criar conta: ';
-        if (e.code === 'auth/email-already-in-use') {
-          msg += 'Este e-mail já possui uma conta cadastrada.';
-        } else if (e.code === 'auth/invalid-email') {
-          msg += 'E-mail inválido.';
-        } else if (e.code === 'auth/operation-not-allowed') {
-          msg += 'O provedor de E-mail/Senha não está ativo no Console do Firebase.';
-        } else {
-          msg += (e.message || 'Erro desconhecido');
-        }
-        alert(msg);
-        setAccountStatus('error');
-      } finally {
-        setIsCreatingAccount(false);
+    setConfirmCreateAccount(true);
+  };
+
+  const handleCreateAccountReal = async () => {
+    setIsCreatingAccount(true);
+    setAccountStatus('loading');
+    try {
+      await createStudentAccount(profile.email, profile.id);
+      setAccountStatus('success');
+      setTimeout(() => setAccountStatus('idle'), 3000);
+      setAlertMsg({ text: 'Acesso criado com sucesso inicializado com a senha padrão "123456"!', type: 'success' });
+    } catch (e: any) {
+      console.error(e);
+      let msg = 'Erro ao criar conta: ';
+      if (e.code === 'auth/email-already-in-use') {
+        msg += 'Este e-mail já possui uma conta cadastrada.';
+      } else if (e.code === 'auth/invalid-email') {
+        msg += 'E-mail inválido.';
+      } else if (e.code === 'auth/operation-not-allowed') {
+        msg += 'O provedor de E-mail/Senha não está ativo no Console do Firebase.';
+      } else {
+        msg += (e.message || 'Erro desconhecido');
       }
+      setAlertMsg({ text: msg, type: 'error' });
+      setAccountStatus('error');
+    } finally {
+      setIsCreatingAccount(false);
     }
   };
 
-  const handleApprove = async (role: UserRole) => {
-    if (confirm(`Aprovar ${profile.fullName} como ${role === UserRole.STUDENT ? 'Aluno' : 'Professor'}?`)) {
-      try {
-        await profilesApi.update(profile.id, {
-          isApproved: true,
-          status: 'active',
-          role: role
-        });
-      } catch (e) {
-        console.error(e);
-        alert('Erro ao aprovar membro.');
-      }
+  const handleApproveReal = async (role: UserRole) => {
+    try {
+      await profilesApi.update(profile.id, {
+        isApproved: true,
+        status: 'active',
+        role: role
+      });
+      setAlertMsg({ text: 'Cadastro aprovado com sucesso!', type: 'success' });
+    } catch (e) {
+      console.error(e);
+      setAlertMsg({ text: 'Erro ao aprovar membro.', type: 'error' });
     }
   };
 
   return (
     <div className={cn(
-      "bg-white p-6 rounded-2xl border shadow-sm hover:shadow-md transition-all group",
+      "bg-white p-6 rounded-2xl border shadow-sm hover:shadow-md transition-all group relative overflow-hidden",
       profile.status === 'pending' ? "border-amber-200 bg-amber-50/10" : "border-slate-200"
     )}>
+      {/* Absolute overlay elements for confirms and messages in iFrame scope */}
+      {confirmDelete && (
+        <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-sm flex flex-col justify-center items-center p-6 z-[60] text-center text-white">
+          <Trash className="w-10 h-10 text-rose-500 mb-3 animate-bounce" />
+          <h5 className="font-bold text-sm uppercase tracking-wider mb-1 text-white">Remover Membro?</h5>
+          <p className="text-xs text-slate-300 max-w-[240px] mb-4">
+            Deseja remover permanentemente o cadastro de <strong>{profile.fullName}</strong>? Esta ação excluirá os registros e tentará desativar o login associado.
+          </p>
+          <div className="flex gap-2 w-full max-w-[220px]">
+            <button 
+              onClick={() => setConfirmDelete(false)}
+              className="flex-1 bg-white/10 hover:bg-white/20 text-white rounded-lg py-2 text-xs font-bold cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button 
+              onClick={async () => {
+                setConfirmDelete(false);
+                await handleDeleteReal();
+              }}
+              className="flex-1 bg-rose-500 hover:bg-rose-600 text-white rounded-lg py-2 text-xs font-bold cursor-pointer"
+            >
+              Excluir
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirmCreateAccount && (
+        <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-sm flex flex-col justify-center items-center p-6 z-[60] text-center text-white">
+          <Mail className="w-10 h-10 text-emerald-500 mb-3 animate-pulse" />
+          <h5 className="font-bold text-sm uppercase tracking-wider mb-1 text-white">Criar Acesso (Login)?</h5>
+          <p className="text-xs text-slate-300 max-w-[240px] mb-4">
+            Deseja habilitar credenciais de acesso para <strong>{profile.fullName}</strong> com a senha inicial padrão <strong>123456</strong>?
+          </p>
+          <div className="flex gap-2 w-full max-w-[220px]">
+            <button 
+              onClick={() => setConfirmCreateAccount(false)}
+              className="flex-1 bg-white/10 hover:bg-white/20 text-white rounded-lg py-2 text-xs font-bold cursor-pointer"
+            >
+              Não
+            </button>
+            <button 
+              onClick={async () => {
+                setConfirmCreateAccount(false);
+                await handleCreateAccountReal();
+              }}
+              className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg py-2 text-xs font-bold cursor-pointer"
+            >
+              Sim, Criar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirmApprove && (
+        <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-sm flex flex-col justify-center items-center p-6 z-[60] text-center text-white">
+          <CheckCircle2 className="w-10 h-10 text-indigo-400 mb-3" />
+          <h5 className="font-bold text-sm uppercase tracking-wider mb-1 text-white">Aprovar Cadastro?</h5>
+          <p className="text-xs text-slate-300 max-w-[240px] mb-4">
+            Confirmar aprovação de <strong>{profile.fullName}</strong> para perfil ativo de {confirmApprove === UserRole.STUDENT ? 'Aluno' : 'Professor'}?
+          </p>
+          <div className="flex gap-2 w-full max-w-[220px]">
+            <button 
+              onClick={() => setConfirmApprove(null)}
+              className="flex-1 bg-white/10 hover:bg-white/20 text-white rounded-lg py-2 text-xs font-bold cursor-pointer"
+            >
+              Voltar
+            </button>
+            <button 
+              onClick={async () => {
+                const role = confirmApprove;
+                setConfirmApprove(null);
+                await handleApproveReal(role);
+              }}
+              className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg py-2 text-xs font-bold cursor-pointer"
+            >
+              Aprovar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {alertMsg && (
+        <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-sm flex flex-col justify-center items-center p-6 z-[60] text-center text-white">
+          {alertMsg.type === 'success' ? (
+            <CheckCircle2 className="w-10 h-10 text-emerald-500 mb-3 animate-bounce" />
+          ) : (
+            <AlertTriangle className="w-10 h-10 text-rose-500 mb-3 animate-ping" />
+          )}
+          <h5 className="font-bold text-sm uppercase tracking-wider mb-1 text-white">
+            {alertMsg.type === 'success' ? 'Sucesso' : 'Aviso/Erro'}
+          </h5>
+          <p className="text-xs text-slate-300 max-w-[240px] mb-4">{alertMsg.text}</p>
+          <button 
+            type="button"
+            onClick={() => setAlertMsg(null)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-xl text-xs font-bold cursor-pointer active:scale-95 transition-all"
+          >
+            Entendido
+          </button>
+        </div>
+      )}
       <div className="flex justify-between items-start">
         <div className="flex gap-4">
           <div className={cn(
@@ -303,14 +446,20 @@ function MemberCard({ profile, payments, onEdit, onViewDetails }: { profile: Pro
               )}
             </div>
             <div className="flex flex-wrap gap-2 mt-1">
-              {!(profile.role === UserRole.RESPONSIBLE && !profile.isStudent) && profile.currentGrade && (
+              {profile.currentGrade && (
                 <span className="text-[10px] uppercase font-bold tracking-wider bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-100">
                    {profile.currentGrade}
                 </span>
               )}
-              <span className="text-[10px] uppercase font-bold tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200">
-                {profile.role || 'student'}
-              </span>
+              {profile.email && emailCounts && emailCounts[profile.email.trim().toLowerCase()] >= 2 ? (
+                <span className="text-[10px] uppercase font-bold tracking-wider bg-purple-100 text-purple-700 px-2 py-0.5 rounded border border-purple-200" title={`Conta Família (Contém ${emailCounts[profile.email.trim().toLowerCase()]} alunos cadastrados com o mesmo e-mail)`}>
+                  Responsável/Família ({emailCounts[profile.email.trim().toLowerCase()]} Alunos)
+                </span>
+              ) : (
+                <span className="text-[10px] uppercase font-bold tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200">
+                  {profile.role || 'student'}
+                </span>
+              )}
               {profile.userId && profile.status === 'active' && (
                 <span className="text-[10px] uppercase font-bold tracking-wider bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded border border-emerald-100 flex items-center gap-1">
                   <CheckCircle className="w-2.5 h-2.5" />
@@ -344,7 +493,7 @@ function MemberCard({ profile, payments, onEdit, onViewDetails }: { profile: Pro
           )}
           {profile.status === 'active' && !profile.userId && profile.email && (
             <button 
-              onClick={handleCreateAccount}
+              onClick={handleCreateAccountStart}
               disabled={isCreatingAccount}
               title="Criar Acesso (Login)"
               className="p-2 hover:bg-emerald-50 rounded-lg transition-colors text-slate-400 hover:text-emerald-600 disabled:opacity-50"
@@ -364,7 +513,7 @@ function MemberCard({ profile, payments, onEdit, onViewDetails }: { profile: Pro
           </button>
           {isAdminUser && (
             <button 
-              onClick={handleDelete} 
+              onClick={() => setConfirmDelete(true)} 
               disabled={isDeleting}
               title="Excluir Membro"
               className="p-2 hover:bg-rose-50 rounded-lg transition-colors text-slate-400 hover:text-rose-600 disabled:opacity-50"
@@ -378,14 +527,14 @@ function MemberCard({ profile, payments, onEdit, onViewDetails }: { profile: Pro
       {profile.status === 'pending' ? (
         <div className="mt-6 flex gap-3">
           <button 
-            onClick={() => handleApprove(UserRole.STUDENT)}
-            className="flex-1 bg-emerald-500 text-white py-2 rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-colors shadow-sm"
+            onClick={() => setConfirmApprove(UserRole.STUDENT)}
+            className="flex-1 bg-emerald-500 text-white py-2 rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-colors shadow-sm cursor-pointer"
           >
             Aprovar Aluno
           </button>
           <button 
-            onClick={() => handleApprove(UserRole.PROFESSOR)}
-            className="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition-colors shadow-sm"
+            onClick={() => setConfirmApprove(UserRole.PROFESSOR)}
+            className="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition-colors shadow-sm cursor-pointer"
           >
             Aprovar Prof
           </button>
@@ -461,22 +610,26 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
   const [customCurrentPassword, setCustomCurrentPassword] = useState('');
   const [showPwdField, setShowPwdField] = useState(false);
 
+  // Custom alert and confirmation dialog states for MemberModal scope
+  const [modalAlert, setModalAlert] = useState<{ text: string, type: 'success' | 'error', onClose?: () => void } | null>(null);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+
   const handleResetPassword = async () => {
     if (!profile?.email) return;
     if (isResettingPassword) return;
     setIsResettingPassword(true);
     try {
       await resetStudentPassword(profile.email, customCurrentPassword || undefined);
-      alert('Sucesso! A senha de login do aluno foi redefinida para o padrão: 123456');
+      setModalAlert({ text: 'Sucesso! A senha de login do aluno foi redefinida para o padrão: 123456', type: 'success' });
       setShowPwdField(false);
       setCustomCurrentPassword('');
     } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
-        alert('Erro: Senha incorreta. Se o aluno já alterou a senha padrão, digite a senha atual dele no campo "Senha de Login Atual do Aluno" para podermos redefini-la.');
+        setModalAlert({ text: 'Erro: Senha incorreta. Se o aluno já alterou a senha padrão, digite a senha atual dele no campo "Senha de Login Atual do Aluno" para podermos redefini-la.', type: 'error' });
         setShowPwdField(true);
       } else {
-        alert(`Erro ao redefinir senha do aluno: ${err.message || 'Erro desconhecido'}`);
+        setModalAlert({ text: `Erro ao redefinir senha do aluno: ${err.message || 'Erro desconhecido'}`, type: 'error' });
       }
     } finally {
       setIsResettingPassword(false);
@@ -489,10 +642,10 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
     setIsSendingResetEmail(true);
     try {
       await sendStudentPasswordReset(profile.email);
-      alert('E-mail de redefinição de senha enviado com sucesso usando as ferramentas oficiais do Firebase!');
+      setModalAlert({ text: 'E-mail de redefinição de senha enviado com sucesso usando as ferramentas oficiais do Firebase!', type: 'success' });
     } catch (err: any) {
       console.error(err);
-      alert(`Erro ao enviar e-mail de redefinição: ${err.message || 'Erro desconhecido'}`);
+      setModalAlert({ text: `Erro ao enviar e-mail de redefinição: ${err.message || 'Erro desconhecido'}`, type: 'error' });
     } finally {
       setIsSendingResetEmail(false);
     }
@@ -503,67 +656,67 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
     if (loading) return;
     setLoading(true);
     try {
+      const normalizedEmail = formData.email ? formData.email.trim().toLowerCase() : '';
+
       // Check if email already exists in profiles (only if email is provided and it is a new profile)
-      if (!profile?.id && formData.email) {
-        const q = query(collection(db, 'profiles'), where('email', '==', formData.email));
+      if (!profile?.id && normalizedEmail) {
+        const q = query(collection(db, 'profiles'), where('email', '==', normalizedEmail));
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
-          alert('Um membro com este e-mail já está cadastrado.');
+          setModalAlert({ text: 'Um membro com este e-mail já está cadastrado.', type: 'error' });
           setLoading(false);
           return;
         }
       }
 
-      const submissionData = { ...formData };
+      const submissionData = { ...formData, email: normalizedEmail };
       if (!submissionData.email) delete (submissionData as any).email;
       if (!submissionData.responsibleId) delete (submissionData as any).responsibleId;
       if (!submissionData.callNumber) delete (submissionData as any).callNumber;
-      if (submissionData.role !== UserRole.RESPONSIBLE) {
-        delete (submissionData as any).isStudent;
-      } else if (!submissionData.isStudent) {
-        submissionData.currentGrade = '';
-        submissionData.lastPromotionDate = '';
-      }
+      delete (submissionData as any).isStudent;
 
       if (profile?.id) {
         // If email has changed, handle updating Firebase Auth login
-        if (formData.email && profile.email && formData.email.toLowerCase() !== profile.email.toLowerCase()) {
+        if (normalizedEmail && profile.email && normalizedEmail !== profile.email.toLowerCase()) {
           if (profile.userId) {
             try {
-              await updateStudentEmail(profile.email, formData.email, customCurrentPassword || undefined);
-              alert('E-mail de login do aluno atualizado com sucesso no Firebase Authentication!');
+              const res = await updateStudentEmail(profile.email, normalizedEmail, customCurrentPassword || undefined, profile.id);
+              if (res && res.uid) {
+                submissionData.userId = res.uid;
+              }
+              setModalAlert({ text: 'E-mail de login do aluno atualizado com sucesso no Firebase Authentication!', type: 'success' });
             } catch (error: any) {
               console.error("Failed to update auth email automatically:", error);
               if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
-                alert('Erro de Autenticação: O aluno já alterou sua senha padrão de "123456". Preencha a senha atual dele no campo de senha atual para poder atualizar o e-mail de login.');
+                setModalAlert({ text: 'Erro de Autenticação: O aluno já alterou sua senha padrão de "123456". Preencha a senha atual dele no campo de senha atual para poder atualizar o e-mail de login.', type: 'error' });
                 setShowPwdField(true);
                 setLoading(false);
                 return;
               } else {
-                alert(`Aviso: O e-mail foi alterado no cadastro, mas o login não pôde ser atualizado no Firebase Authentication: ${error.message || 'Erro desconhecido'}`);
+                setModalAlert({ text: `Aviso: O e-mail foi alterado no cadastro, mas o login não pôde ser atualizado no Firebase Authentication: ${error.message || 'Erro desconhecido'}`, type: 'error' });
               }
             }
           } else {
             // Profile exists but does not have a userId/Auth account. Create one!
             try {
-              const res = await createStudentAccount(formData.email, profile.id);
+              const res = await createStudentAccount(normalizedEmail, profile.id);
               if (res && res.uid) {
                 submissionData.userId = res.uid;
               }
-              alert('Conta de login criada com sucesso no Firebase Authentication para o novo e-mail!');
+              setModalAlert({ text: 'Conta de login criada com sucesso no Firebase Authentication para o novo e-mail!', type: 'success' });
             } catch (createErr: any) {
               console.error("Error creating student account automatically on email change:", createErr);
-              alert(`Membro atualizado, mas erro ao criar conta de acesso (Login): ${createErr.message || 'Erro desconhecido'}`);
+              setModalAlert({ text: `Membro atualizado, mas erro ao criar conta de acesso (Login): ${createErr.message || 'Erro desconhecido'}`, type: 'error' });
             }
           }
-        } else if (formData.email && !profile.userId) {
+        } else if (normalizedEmail && !profile.userId) {
           // If the email did NOT change, but the profile has an email and no userId, let's create a login account!
           try {
-            const res = await createStudentAccount(formData.email, profile.id);
+            const res = await createStudentAccount(normalizedEmail, profile.id);
             if (res && res.uid) {
               submissionData.userId = res.uid;
             }
-            alert('Conta de login criada com sucesso no Firebase Authentication para o e-mail cadastrado!');
+            setModalAlert({ text: 'Conta de login criada com sucesso no Firebase Authentication para o e-mail cadastrado!', type: 'success' });
           } catch (createErr: any) {
             console.error("Error creating student account automatically for existing email:", createErr);
           }
@@ -577,12 +730,12 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
         });
 
         // Automatically create login account only if email is provided
-        if (formData.email) {
+        if (normalizedEmail) {
           try {
-            await createStudentAccount(formData.email, docRef.id);
+            await createStudentAccount(normalizedEmail, docRef.id);
           } catch (accountError: any) {
             console.error("Error creating student account automatically:", accountError);
-            alert(`Membro cadastrado, mas erro ao criar conta de acesso (Login): ${accountError.message || 'Erro desconhecido'}`);
+            setModalAlert({ text: `Membro cadastrado, mas erro ao criar conta de acesso (Login): ${accountError.message || 'Erro desconhecido'}`, type: 'error' });
           }
         }
         onClose();
@@ -647,21 +800,19 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
     }
   };
 
-  const handleDelete = async () => {
+  const handleDeleteReal = async () => {
     if (!profile) return;
-    if (confirm(`ATENÇÃO: Tem certeza que deseja excluir permanentemente o cadastro de ${profile.fullName}? Esta ação não pode ser desfeita.`)) {
-      setIsDeleting(true);
-      try {
-        if (profile.email) {
-          await deleteStudentAccount(profile.email);
-        }
-        await deleteDoc(doc(db, 'profiles', profile.id));
-        onClose();
-      } catch (e) {
-        handleFirestoreError(e, OperationType.DELETE, `profiles/${profile.id}`);
-      } finally {
-        setIsDeleting(false);
+    setIsDeleting(true);
+    try {
+      if (profile.email) {
+        await deleteStudentAccount(profile.email);
       }
+      await deleteDoc(doc(db, 'profiles', profile.id));
+      onClose();
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, `profiles/${profile.id}`);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -825,7 +976,7 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
               />
             </div>
 
-            {!(formData.role === UserRole.RESPONSIBLE && !formData.isStudent) && (
+            {formData.role === UserRole.STUDENT && (
               <>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Última Graduação</label>
@@ -853,56 +1004,84 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
             )}
 
             {isAdminUser && (
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Função</label>
-                <select 
-                  className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium appearance-none"
-                  value={formData.role}
-                  onChange={e => setFormData({...formData, role: e.target.value as UserRole})}
-                >
-                  <option value={UserRole.STUDENT}>Aluno</option>
-                  <option value={UserRole.PROFESSOR}>Professor</option>
-                  <option value={UserRole.RESPONSIBLE}>Responsável</option>
-                  <option value={UserRole.ADMIN}>Administrador</option>
-                </select>
-              </div>
-            )}
+               <div>
+                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Função</label>
+                 <select 
+                   className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium appearance-none"
+                   value={formData.role}
+                   onChange={e => setFormData({...formData, role: e.target.value as UserRole})}
+                 >
+                   <option value={UserRole.STUDENT}>Aluno</option>
+                   <option value={UserRole.PROFESSOR}>Professor</option>
 
-            {formData.role === UserRole.RESPONSIBLE && (
-              <div className="md:col-span-2 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 flex items-center justify-between transition-all">
-                <div>
-                  <h4 className="font-bold text-sm text-indigo-900">Também é Aluno (treina no dojo)?</h4>
-                  <p className="text-[10px] text-indigo-500 font-medium">Ative esta opção se este responsável também treina no dojo de judô/karatê e tem suas próprias presenças e mensalidades.</p>
+                   <option value={UserRole.ADMIN}>Administrador</option>
+                 </select>
+               </div>
+             )}
+ 
+             {isAdminUser && (
+               <div>
+                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Situação (Status)</label>
+                 <select 
+                   className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium appearance-none"
+                   value={formData.status}
+                   onChange={e => {
+                     const statusVal = e.target.value as any;
+                     setFormData({
+                       ...formData, 
+                       status: statusVal, 
+                       isApproved: statusVal === 'active' || statusVal === 'inactive' || statusVal === 'blocked'
+                     });
+                   }}
+                 >
+                   <option value="active">Ativo (Active)</option>
+                   <option value="inactive">Inativo (Inactive)</option>
+                   <option value="pending">Pendente (Pending)</option>
+                   <option value="blocked">Bloqueado (Blocked)</option>
+                  </select>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    className="sr-only peer" 
-                    checked={formData.isStudent}
-                    onChange={e => setFormData({...formData, isStudent: e.target.checked})}
-                  />
-                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                </label>
-              </div>
-            )}
+              )}
 
             {formData.role === UserRole.STUDENT && (
-              <div className="md:col-span-2">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Vincular a Responsável (Opcional)</label>
-                <select 
-                  className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium appearance-none"
-                  value={formData.responsibleId}
-                  onChange={e => setFormData({...formData, responsibleId: e.target.value})}
-                >
-                  <option value="">Nenhum (Aluno independente)</option>
-                  {(profiles || []).filter(p => (p.role === UserRole.RESPONSIBLE || p.role === UserRole.ADMIN) && p.id !== profile?.id).sort((a,b) => (a.fullName || '').localeCompare(b.fullName || '')).map(p => (
-                    <option key={p.id} value={p.id}>{p.fullName || 'Sem Nome'} ({p.role})</option>
-                  ))}
-                </select>
+              <div className="md:col-span-2 p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
+                <h4 className="font-bold text-sm text-slate-800 uppercase tracking-wider">Informações do Responsável (Opcional)</h4>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block">Nome do Responsável</label>
+                    <input 
+                      type="text"
+                      placeholder="Nome completo"
+                      className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl py-3 px-4 outline-none text-sm transition-all text-slate-900 font-medium"
+                      value={formData.responsibleName || ''}
+                      onChange={e => setFormData({...formData, responsibleName: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block">Telefone do Responsável</label>
+                    <input 
+                      type="text"
+                      placeholder="(00) 00000-0000"
+                      className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl py-3 px-4 outline-none text-sm transition-all text-slate-900 font-medium"
+                      value={formData.responsiblePhone || ''}
+                      onChange={e => setFormData({...formData, responsiblePhone: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block">E-mail do Responsável</label>
+                    <input 
+                      type="email"
+                      placeholder="email@exemplo.com"
+                      className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl py-3 px-4 outline-none text-sm transition-all text-slate-900 font-medium"
+                      value={formData.responsibleEmail || ''}
+                      onChange={e => setFormData({...formData, responsibleEmail: e.target.value})}
+                    />
+                  </div>
+                </div>
               </div>
             )}
 
-            {(formData.role === UserRole.STUDENT || (formData.role === UserRole.RESPONSIBLE && formData.isStudent)) && isAdminUser && (
+            {formData.role === UserRole.STUDENT && isAdminUser && (
               <div className="md:col-span-2">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Número de Chamada (Opcional - Anotações Pessoais)</label>
                 <input 
@@ -944,9 +1123,9 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
             {profile && isAdminUser && (
               <button 
                 type="button" 
-                onClick={handleDelete}
+                onClick={() => setShowConfirmDelete(true)}
                 disabled={isDeleting || loading}
-                className="px-4 py-3 font-bold text-rose-500 hover:bg-rose-50 rounded-xl transition-all flex items-center justify-center gap-2 mr-auto active:scale-95"
+                className="px-4 py-3 font-bold text-rose-500 hover:bg-rose-50 rounded-xl transition-all flex items-center justify-center gap-2 mr-auto active:scale-95 cursor-pointer"
               >
                 {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                 <span>Excluir</span>
@@ -955,14 +1134,14 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
             <button 
               type="button" 
               onClick={onClose} 
-              className="px-6 py-3 font-bold text-slate-400 hover:text-slate-600 active:scale-95"
+              className="px-6 py-3 font-bold text-slate-400 hover:text-slate-600 active:scale-95 cursor-pointer"
             >
               Cancelar
             </button>
             <button 
               disabled={loading || isDeleting}
               className={cn(
-                "flex-1 bg-indigo-600 text-white py-3.5 rounded-xl font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2",
+                "flex-1 bg-indigo-600 text-white py-3.5 rounded-xl font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 cursor-pointer",
                 loading ? "opacity-50 cursor-not-allowed" : "hover:bg-indigo-700 shadow-indigo-600/20"
               )}
             >
@@ -972,6 +1151,66 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
           </div>
         </form>
       </motion.div>
+
+      {showConfirmDelete && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex flex-col justify-center items-center p-6 z-[200] text-center text-white">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col items-center">
+            <Trash2 className="w-12 h-12 text-rose-500 mb-4 animate-bounce" />
+            <h5 className="font-extrabold text-base uppercase tracking-wider mb-2 text-white">Excluir Cadastro Permanentemente?</h5>
+            <p className="text-xs text-slate-300 mb-6 leading-relaxed">
+              Tem certeza que deseja excluir permanentemente o cadastro de <strong>{profile?.fullName}</strong>? Esta ação é irreversível e tentará remover o login do Firebase Auth correspondente.
+            </p>
+            <div className="flex gap-3 w-full">
+              <button 
+                type="button"
+                onClick={() => setShowConfirmDelete(false)}
+                className="flex-1 bg-white/10 hover:bg-white/20 text-white rounded-xl py-3 text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button 
+                type="button"
+                onClick={async () => {
+                  setShowConfirmDelete(false);
+                  await handleDeleteReal();
+                }}
+                className="flex-1 bg-rose-500 hover:bg-rose-600 text-white rounded-xl py-3 text-xs font-bold transition-all cursor-pointer"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalAlert && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex flex-col justify-center items-center p-6 z-[200] text-center text-white">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col items-center">
+            {modalAlert.type === 'success' ? (
+              <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-4 animate-pulse" />
+            ) : (
+              <AlertTriangle className="w-12 h-12 text-rose-500 mb-4 animate-bounce" />
+            )}
+            <h5 className="font-extrabold text-base uppercase tracking-wider mb-2 text-white">
+              {modalAlert.type === 'success' ? 'Sucesso!' : 'Aviso/Erro'}
+            </h5>
+            <p className="text-xs text-slate-300 mb-6 leading-relaxed">
+              {modalAlert.text}
+            </p>
+            <button 
+              type="button"
+              onClick={() => {
+                const onDismiss = modalAlert.onClose || (() => {});
+                setModalAlert(null);
+                onDismiss();
+              }}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3 text-xs font-bold transition-all cursor-pointer"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

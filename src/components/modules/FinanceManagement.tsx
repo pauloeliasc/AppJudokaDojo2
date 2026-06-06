@@ -12,8 +12,9 @@ export default function FinanceManagement({ profiles, payments, settings }: { pr
   const confirmPayment = async (studentId: string, month: number, year: number) => {
     setLoading(true);
     try {
-      const paymentId = `${studentId}_${year}_${month}`;
-      await paymentsApi.updateStatus(paymentId, 'paid', new Date().toISOString());
+      const existingPayment = payments.find(p => p.memberId === studentId && p.month === month && p.year === year);
+      const paymentId = existingPayment?.id || `${studentId}_${year}_${month}`;
+      await paymentsApi.updateStatus(paymentId, 'paid', new Date().toISOString(), studentId, month, year);
 
       // Add points for being on time
       const profile = profiles.find(p => p.id === studentId);

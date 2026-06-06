@@ -3,6 +3,8 @@ import { useAuth } from '../../AuthContext';
 import { profilesApi } from '../../services/firestoreService';
 import { changePassword } from '../../services/adminService';
 import { UserCircle, Save, Key, Loader2, CheckCircle, Fingerprint } from 'lucide-react';
+import { updateEmail } from 'firebase/auth';
+import { auth } from '../../lib/firebase';
 import { motion } from 'motion/react';
 import { isBiometricsSupported, registerBiometrics } from '../../services/biometricService';
 import BiometricPrompt from '../modules/BiometricPrompt';
@@ -91,14 +93,38 @@ export default function ProfileView() {
     setError('');
     try {
       const profileId = user.id || user.uid;
+      const normalizedEmail = formData.email.trim().toLowerCase();
+      
+      // Update Firebase Auth email if user is editing themselves and the email changed
+      const currentUser = auth.currentUser;
+      let emailUpdateWarning = '';
+
+      if (currentUser && currentUser.email && normalizedEmail !== currentUser.email.toLowerCase()) {
+        try {
+          await updateEmail(currentUser, normalizedEmail);
+        } catch (authError: any) {
+          console.warn('Failed to update login email via updateEmail directly:', authError);
+          if (authError.code === 'auth/requires-recent-login') {
+            emailUpdateWarning = 'Seu e-mail foi atualizado no cadastro, mas para atualizar seu e-mail de login com segurança, o Firebase exige que você realize login recentemente. Por favor, faça logout e login novamente para aplicar a alteração de login.';
+          } else {
+            emailUpdateWarning = `Seu e-mail foi atualizado no cadastro, mas não conseguimos atualizar seu login do Firebase automaticamente: ${authError.message || 'Erro desconhecido'}`;
+          }
+        }
+      }
+
       await profilesApi.update(profileId, {
         fullName: formData.fullName,
-        email: formData.email,
+        email: normalizedEmail,
         phoneNumber: formData.phoneNumber,
         address: formData.address
       });
-      setSuccess('Perfil atualizado com sucesso!');
-      setTimeout(() => setSuccess(''), 3000);
+
+      if (emailUpdateWarning) {
+        setError(emailUpdateWarning);
+      } else {
+        setSuccess('Perfil e login atualizados com sucesso!');
+        setTimeout(() => setSuccess(''), 3000);
+      }
     } catch (e: any) {
       setError(e.message || 'Erro ao atualizar perfil');
     } finally {

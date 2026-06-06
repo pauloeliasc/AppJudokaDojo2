@@ -12,7 +12,7 @@ export default function StudentRanking() {
     const unsub = onSnapshot(collection(db, 'profiles'), (snapshot) => {
       const sorted = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() } as Profile))
-        .filter(p => !p.role || p.role === UserRole.STUDENT || p.role === UserRole.PROFESSOR || (p.role === UserRole.RESPONSIBLE && p.isStudent))
+        .filter(p => !p.isPointer && (!p.role || p.role === UserRole.STUDENT || p.role === UserRole.PROFESSOR))
         .sort((a,b) => (b.points || 0) - (a.points || 0));
       setLeaderboard(sorted.slice(0, 10));
     });

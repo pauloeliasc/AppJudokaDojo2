@@ -49,8 +49,7 @@ service cloud.firestore {
          get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('id', '') == profileId) ||
         (exists(/databases/$(database)/documents/profiles/$(profileId)) && (
           get(/databases/$(database)/documents/profiles/$(profileId)).data.get('userId', '') == request.auth.uid ||
-          get(/databases/$(database)/documents/profiles/$(profileId)).data.get('responsibleId', '') == request.auth.uid ||
-          (request.auth.token.email != null && get(/databases/$(database)/documents/profiles/$(profileId)).data.get('email', '').lower() == request.auth.token.email.lower())
+          (request.auth.token.email != null && get(/databases/$(database)/documents/profiles/$(profileId)).data.get('email', '') == request.auth.token.email)
         ))
       );
     }
@@ -71,13 +70,13 @@ service cloud.firestore {
 
     function isValidUser(data) {
       return data.keys().hasAll(['role']) &&
-             data.role in ['admin', 'professor', 'student', 'responsible'];
+             data.role in ['admin', 'professor', 'student'];
     }
 
     function isValidProfile(data) {
       return data.keys().hasAll(['fullName', 'role']) &&
              data.fullName is string && data.fullName.size() <= 200 &&
-             data.role in ['admin', 'professor', 'student', 'responsible'];
+             data.role in ['admin', 'professor', 'student'];
     }
 
     function isValidClass(data) {
@@ -110,13 +109,24 @@ service cloud.firestore {
              data.professorId is string;
     }
 
+    function isValidEvent(data) {
+      return data.keys().hasAll(['title', 'type', 'date', 'time', 'location', 'description', 'createdBy']) &&
+             data.title is string && data.title.size() <= 150 &&
+             data.type is string &&
+             data.date is string &&
+             data.time is string &&
+             data.location is string &&
+             data.description is string &&
+             data.createdBy is string;
+    }
+
 
     // --- Match Rules ---
 
     match /schedule/{scheduleId} {
       allow read: if isSignedIn();
       allow create, update: if isProfessor() && isValidSchedule(incoming());
-      allow delete: if isProfessor();
+      allow delete: if isProfessor() || isAdmin();
     }
 
     match /users/{userId} {
@@ -128,7 +138,7 @@ service cloud.firestore {
     match /profiles/{profileId} {
       allow get: if isSignedIn();
       allow list: if isSignedIn();
-      allow create, update: if isSignedIn() && (isMyProfile(profileId) || isProfessor());
+      allow create, update: if isSignedIn() && (isMyProfile(profileId) || isProfessor() || (request.auth.token.email != null && incoming().get('email', '') == request.auth.token.email));
       allow delete: if isAdmin();
     }
 
@@ -136,11 +146,11 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidClass(incoming());
       allow update: if isProfessor() && isValidClass(incoming());
-      allow delete: if isProfessor();
+      allow delete: if isProfessor() || isAdmin();
     }
 
     match /{path=**}/presences/{presenceId} {
-      allow list: if isSignedIn() && (isProfessor() || isMyProfile(resource.data.memberId));
+      allow list: if isSignedIn();
       allow get: if isSignedIn();
       allow create, update: if (isProfessor() || isMyProfile(incoming().memberId)) && isValidPresence(incoming());
       allow delete: if isProfessor() || isMyProfile(presenceId) || (resource != null && isMyProfile(resource.data.get('memberId', '')));
@@ -156,6 +166,10 @@ service cloud.firestore {
     match /settings/global {
       allow read: if isSignedIn();
       allow write: if isAdmin();
+    }
+
+    match /events/{eventId} {
+      allow read, write: if true;
     }
 
     match /biometric_credentials/{credentialId} {

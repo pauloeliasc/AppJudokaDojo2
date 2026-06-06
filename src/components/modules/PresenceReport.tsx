@@ -186,11 +186,11 @@ export default function PresenceReport({ presences, profiles, classes }: Presenc
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredPresences.slice(0, 20).map(p => {
+              {filteredPresences.slice(0, 20).map((p, idx) => {
                 const student = profiles.find(pr => pr.id === p.memberId);
                 const classData = classes.find(c => c.id === p.classId);
                 return (
-                  <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
+                  <tr key={`${p.id}-${p.classId || idx}`} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4">
                       <span className="text-xs font-bold text-slate-500">{formatDate(p.timestamp)}</span>
                     </td>

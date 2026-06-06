@@ -135,17 +135,11 @@ export default function MemberDetailsModal({ profile, onClose }: MemberDetailsMo
                   </span>
                 )}
               </div>
-              {profile.role === UserRole.RESPONSIBLE && !profile.isStudent ? (
-                <p className="text-xs text-slate-400 font-medium">
-                  Responsável Financeiro • Membro desde {new Date(profile.enrollmentDate + 'T00:00:00').getFullYear()}
-                </p>
-              ) : (
-                <p className="text-xs text-slate-400 font-medium">
-                  Última Graduação: {profile.currentGrade || 'Não Graduado'} 
-                  {profile.lastPromotionDate && ` (${new Date(profile.lastPromotionDate + 'T00:00:00').toLocaleDateString('pt-BR')})`} 
-                  • Membro desde {new Date(profile.enrollmentDate + 'T00:00:00').getFullYear()}
-                </p>
-              )}
+              <p className="text-xs text-slate-400 font-medium">
+                Última Graduação: {profile.currentGrade || 'Não Graduado'} 
+                {profile.lastPromotionDate && ` (${new Date(profile.lastPromotionDate + 'T00:00:00').toLocaleDateString('pt-BR')})`} 
+                • Membro desde {new Date(profile.enrollmentDate + 'T00:00:00').getFullYear()}
+              </p>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium">
                 {profile.phoneNumber && (
                   <span className="flex items-center gap-1">
@@ -330,10 +324,10 @@ export default function MemberDetailsModal({ profile, onClose }: MemberDetailsMo
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                         {presences.length > 0 ? (
-                          presences.slice(0, 10).map(p => {
+                          presences.slice(0, 10).map((p, idx) => {
                             const session = allClasses.find(c => c.id === p.classId);
                             return (
-                              <tr key={p.id} className="hover:bg-slate-50 transition-colors">
+                              <tr key={`${p.id}-${p.classId || idx}`} className="hover:bg-slate-50 transition-colors">
                                 <td className="px-6 py-4 text-xs font-bold text-slate-700">
                                   {new Date(p.timestamp).toLocaleDateString('pt-BR')}
                                 </td>
