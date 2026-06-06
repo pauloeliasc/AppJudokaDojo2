@@ -14,7 +14,7 @@ import PWAInstallPrompt from './modules/PWAInstallPrompt';
 import EventsView from './views/EventsView';
 
 export default function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout, activeProfileId, setActiveProfileId, availableProfiles } = useAuth();
   const [activeTab, setActiveTab] = useState('home');
 
   if (!user) return null;
@@ -64,6 +64,35 @@ export default function Dashboard() {
       
       <main className="flex-1 md:ml-20 lg:ml-64 min-h-screen">
         <div className="max-w-6xl mx-auto p-4 md:p-10">
+          {/* Family Profiles Switcher widget */}
+          {availableProfiles.length > 1 && user.role === UserRole.STUDENT && (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-gradient-to-r from-indigo-50 to-indigo-50/50 border border-indigo-100 p-4 rounded-3xl mb-6 gap-3 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0">
+                  <Users className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500">Contas da Família</span>
+                  <p className="text-xs text-slate-600 font-medium">Você está visualizando o perfil de <span className="font-extrabold text-indigo-950">{user.name}</span></p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Alterar Perfil:</span>
+                <select
+                  value={activeProfileId || ''}
+                  onChange={(e) => setActiveProfileId(e.target.value)}
+                  className="w-full sm:w-auto bg-white border-2 border-indigo-100 focus:border-indigo-500 rounded-xl px-3 py-1.5 text-xs font-bold text-indigo-950 outline-none transition-all shadow-sm cursor-pointer"
+                >
+                  {availableProfiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.fullName} (Faixa {p.currentGrade || 'Branca'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'home' && <PWAInstallPrompt />}
           <AnimatePresence mode="wait">
             <motion.div

@@ -190,6 +190,11 @@ export default function FamilyManagement() {
       return;
     }
 
+    if (!isEditing && user?.role === UserRole.STUDENT) {
+      setFormError('Alunos não têm permissão para adicionar novos membros.');
+      return;
+    }
+
     try {
       const payload = {
         fullName: formData.fullName.trim(),
@@ -315,7 +320,7 @@ export default function FamilyManagement() {
               <Users className="w-5 h-5 text-indigo-600" />
               <span>Lista de Alunos</span>
             </h3>
-            {!isAdding && !isEditing && (
+            {!isAdding && !isEditing && user?.role !== UserRole.STUDENT && (
               <button 
                 onClick={() => {
                   setFormData(defaultFormState);
@@ -493,7 +498,7 @@ export default function FamilyManagement() {
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
-                            {familyMembers.length > 1 && (
+                            {familyMembers.length > 1 && user?.role !== UserRole.STUDENT && (
                               <button 
                                 onClick={() => {
                                   setShowConfirmDeleteId(member.id);
