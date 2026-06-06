@@ -6,7 +6,7 @@ import {defineConfig, loadEnv} from 'vite';
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
-    base: './',
+    base: '/AppJudokaDojo2/', // <-- CORRIGIDO PARA O NOME DO SEU REPOSITÓRIO
     plugins: [
       react(), 
       tailwindcss(),
