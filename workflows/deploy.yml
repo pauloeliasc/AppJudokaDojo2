@@ -3,7 +3,7 @@ name: Deploy Vite App
 on:
   push:
     branches:
-      - main # Mude para master apenas se a sua branch principal se chamar master
+      - main
 
 permissions:
   contents: read
