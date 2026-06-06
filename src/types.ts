@@ -43,6 +43,7 @@ export interface Profile {
   callNumber?: string; // Student roll call number
   isStudent?: boolean; // Responsible profile can also be a student too
   isPointer?: boolean; // Indicates if this profile is just a pointer reference
+  isPrivateProfile?: boolean; // Matches user requested privacy setting
 }
 
 export enum ClassType {

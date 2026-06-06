@@ -30,7 +30,8 @@
         "points": { "type": "number" },
         "role": { "type": "string" },
         "callNumber": { "type": "string" },
-        "isStudent": { "type": "boolean" }
+        "isStudent": { "type": "boolean" },
+        "isPrivateProfile": { "type": "boolean" }
       },
       "required": ["fullName", "role"]
     },

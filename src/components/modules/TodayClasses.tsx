@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { db, doc } from '../../lib/firebase';
 import { collection, query, onSnapshot, where, collectionGroup, setDoc, deleteDoc } from 'firebase/firestore';
 import { Profile, ClassSession, Schedule, Presence, UserRole } from '../../types';
-import { Star, Clock, Activity, Loader2, AlertCircle, Users } from 'lucide-react';
+import { Star, Clock, Activity, Loader2, AlertCircle, Users, EyeOff, Lock } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { profilesApi, classesApi } from '../../services/firestoreService';
 
@@ -200,6 +200,7 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
           const classSession = 'isClass' in item ? item : classes.find(c => c.scheduleId === (item as Schedule).id && c.date.startsWith(dateStr));
           const hasCheckedIn = classSession ? userPresences[classSession.id] : false;
           const isLoading = loading === id;
+          const classPresences = classSession ? allTodayPresences.filter(p => p.classId === classSession.id) : [];
 
           return (
             <div key={idx} className={cn(
@@ -226,6 +227,58 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
                     <span className="text-[10px] font-bold text-slate-500 tracking-tight">
                       {presenceCounts[classSession.id] || 0} {(presenceCounts[classSession.id] || 0) === 1 ? 'aluno presente' : 'alunos presentes'}
                     </span>
+                  </div>
+                )}
+
+                {classSession && classPresences.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-slate-200/50">
+                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                      <span>No treino agora ({classPresences.length})</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 max-h-[72px] overflow-y-auto pr-1">
+                      {classPresences.map((p, pIdx) => {
+                        const studentProfile = allProfiles.find(prof => prof.id === p.memberId);
+                        const isMe = profile && p.memberId === profile.id;
+                        const isPrivate = studentProfile?.isPrivateProfile;
+
+                        const displayName = isMe
+                          ? (isPrivate ? "Você (Privado)" : "Você")
+                          : (isPrivate ? "Colega Oculto" : (studentProfile?.fullName?.split(' ')[0] || 'Aluno'));
+
+                        const showPhoto = !isPrivate || isMe;
+
+                        return (
+                          <div
+                            key={p.id || pIdx}
+                            className={cn(
+                              "flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold select-none border transition-all",
+                              isMe 
+                                ? "bg-emerald-100/85 border-emerald-200/70 text-emerald-800" 
+                                : isPrivate 
+                                  ? "bg-slate-100 border-slate-200 text-slate-400" 
+                                  : "bg-white border-slate-100 hover:border-slate-300 text-slate-600"
+                            )}
+                            title={isPrivate ? "Este colega optou por ocultar a presença" : (studentProfile?.fullName || 'Aluno')}
+                          >
+                            <div className="w-4 h-4 rounded-full flex items-center justify-center font-black text-[8px] overflow-hidden border border-slate-200 bg-slate-50 flex-shrink-0">
+                              {showPhoto && studentProfile?.photoUrl ? (
+                                <img
+                                  src={studentProfile.photoUrl}
+                                  alt={displayName}
+                                  className="w-full h-full object-cover"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : isPrivate ? (
+                                <Lock className="w-2 h-2 text-slate-400" />
+                              ) : (
+                                displayName.slice(0, 1).toUpperCase()
+                              )}
+                            </div>
+                            <span className="truncate max-w-[70px]">{displayName}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -287,23 +340,36 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
             {allTodayPresences.map((p, idx) => {
               const studentProfile = allProfiles.find(prof => prof.id === p.memberId);
               const classData = classes.find(c => c.id === p.classId);
+              const isMe = profile && p.memberId === profile.id;
+              const isPrivate = studentProfile?.isPrivateProfile;
+
+              const displayName = isMe
+                ? (isPrivate ? "Você (Oculto para colegas)" : "Você")
+                : (isPrivate ? "Colega Oculto" : (studentProfile?.fullName || 'Visitante'));
+
+              const showPhoto = !isPrivate || isMe;
               
               return (
                 <div key={`${p.id}-${p.classId || idx}`} className="flex items-center gap-4 p-4 bg-slate-50 border border-slate-100 rounded-2xl group hover:border-emerald-200 hover:bg-white transition-all">
-                  <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold overflow-hidden border-2 border-white shadow-sm">
-                    {studentProfile?.photoUrl ? (
-                      <img src={studentProfile.photoUrl} alt={studentProfile.fullName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold overflow-hidden border-2 border-white shadow-sm flex-shrink-0">
+                    {showPhoto && studentProfile?.photoUrl ? (
+                      <img src={studentProfile.photoUrl} alt={displayName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : isPrivate ? (
+                      <Lock className="w-4 h-4 text-slate-400" />
                     ) : (
-                      studentProfile?.fullName?.charAt(0) || '?'
+                      displayName.charAt(0)
                     )}
                   </div>
                   <div className="flex flex-col min-w-0">
-                    <span className="font-bold text-slate-800 text-sm truncate">{studentProfile?.fullName || 'Visitante'}</span>
+                    <span className={cn(
+                      "font-bold text-slate-800 text-sm truncate",
+                      isPrivate && !isMe && "text-slate-400 italic"
+                    )}>{displayName}</span>
                     <div className="flex items-center gap-1.5 min-w-0">
                       <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-tight truncate">
                         {classData?.title || 'Aula'}
                       </span>
-                      <span className="text-[8px] text-slate-400 font-bold">at {classData?.time || '--:--'}</span>
+                      <span className="text-[8px] text-slate-400 font-bold">às {classData?.time || '--:--'}</span>
                     </div>
                   </div>
                 </div>

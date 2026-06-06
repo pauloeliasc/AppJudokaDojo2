@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../AuthContext';
 import { profilesApi } from '../../services/firestoreService';
 import { changePassword } from '../../services/adminService';
-import { UserCircle, Save, Key, Loader2, CheckCircle, Fingerprint } from 'lucide-react';
+import { UserCircle, Save, Key, Loader2, CheckCircle, Fingerprint, EyeOff } from 'lucide-react';
 import { updateEmail } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 import { motion } from 'motion/react';
@@ -23,6 +23,7 @@ export default function ProfileView() {
     email: '',
     phoneNumber: '',
     address: '',
+    isPrivateProfile: false,
   });
 
   React.useEffect(() => {
@@ -36,6 +37,7 @@ export default function ProfileView() {
             email: profileData.email || '',
             phoneNumber: profileData.phoneNumber || '',
             address: profileData.address || '',
+            isPrivateProfile: !!profileData.isPrivateProfile,
           });
         } else {
           setFormData({
@@ -43,6 +45,7 @@ export default function ProfileView() {
             email: user.email || '',
             phoneNumber: '',
             address: '',
+            isPrivateProfile: false,
           });
         }
       });
@@ -116,7 +119,8 @@ export default function ProfileView() {
         fullName: formData.fullName,
         email: normalizedEmail,
         phoneNumber: formData.phoneNumber,
-        address: formData.address
+        address: formData.address,
+        isPrivateProfile: formData.isPrivateProfile
       });
 
       if (emailUpdateWarning) {
@@ -234,6 +238,29 @@ export default function ProfileView() {
                 onChange={e => setFormData({...formData, address: e.target.value})}
               />
             </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-start gap-3.5 transition-all focus-within:border-indigo-500">
+              <div className="flex items-center h-5 mt-0.5 animate-fade-in/10">
+                <input
+                  id="isPrivateProfile"
+                  name="isPrivateProfile"
+                  type="checkbox"
+                  className="w-4.5 h-4.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                  checked={formData.isPrivateProfile}
+                  onChange={e => setFormData({...formData, isPrivateProfile: e.target.checked})}
+                />
+              </div>
+              <div className="text-xs">
+                <label htmlFor="isPrivateProfile" className="font-bold text-slate-800 flex items-center gap-1.5 cursor-pointer select-none">
+                  <EyeOff className="w-3.5 h-3.5 text-slate-505 text-indigo-500" />
+                  Perfil Privado (Ocultar Presença)
+                </label>
+                <p className="text-slate-400 font-medium leading-relaxed mt-1">
+                  Ao ativar, seu nome e foto de perfil serão ocultados dos seus colegas no painel de check-ins em tempo real. O professor ainda verá sua presença normalmente nos treinos.
+                </p>
+              </div>
+            </div>
+
             <button 
               disabled={loading}
               className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"

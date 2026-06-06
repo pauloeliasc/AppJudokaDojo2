@@ -249,9 +249,20 @@ function MemberCard({ profile, payments, onEdit, onViewDetails, emailCounts }: {
   const handleDeleteReal = async () => {
     setIsDeleting(true);
     try {
-      // Try to delete auth account first if email exists
+      // Try to delete auth account first if email exists and no other student uses it
       if (profile.email) {
-        await deleteStudentAccount(profile.email);
+        try {
+          const q = query(collection(db, 'profiles'), where('email', '==', profile.email.trim().toLowerCase()));
+          const querySnapshot = await getDocs(q);
+          const otherProfiles = querySnapshot.docs.filter(d => d.id !== profile.id);
+          if (otherProfiles.length === 0) {
+            await deleteStudentAccount(profile.email);
+          } else {
+            console.log(`Email ${profile.email} is still used by other profiles:`, otherProfiles.map(p => p.id));
+          }
+        } catch (authError) {
+          console.error("Error checking or deleting auth user:", authError);
+        }
       }
       
       // Delete firestore profile
@@ -663,10 +674,32 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
       if (!submissionData.callNumber) delete (submissionData as any).callNumber;
       delete (submissionData as any).isStudent;
 
+      // Look up if any other student in the database is using this email and already has a userId
+      let existingUserId: string | null = null;
+      if (normalizedEmail) {
+        try {
+          const q = query(collection(db, 'profiles'), where('email', '==', normalizedEmail));
+          const querySnapshot = await getDocs(q);
+          const match = querySnapshot.docs.find(d => d.id !== profile?.id && d.data().userId);
+          if (match) {
+            existingUserId = match.data().userId;
+          }
+        } catch (err) {
+          console.error("Error looking up existing user profiles for current email:", err);
+        }
+      }
+
       if (profile?.id) {
         // If email has changed, handle updating Firebase Auth login
         if (normalizedEmail && profile.email && normalizedEmail !== profile.email.toLowerCase()) {
-          if (profile.userId) {
+          if (existingUserId) {
+            submissionData.userId = existingUserId;
+            setModalAlert({ 
+              text: 'E-mail alterado e vinculado com sucesso ao login familiar compartilhado!', 
+              type: 'success', 
+              onClose: () => onClose()
+            });
+          } else if (profile.userId) {
             try {
               const res = await updateStudentEmail(profile.email, normalizedEmail, customCurrentPassword || undefined, profile.id);
               if (res && res.uid) {
@@ -698,35 +731,79 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
             }
           }
         } else if (normalizedEmail && !profile.userId) {
-          // If the email did NOT change, but the profile has an email and no userId, let's create a login account!
-          try {
-            const res = await createStudentAccount(normalizedEmail, profile.id);
-            if (res && res.uid) {
-              submissionData.userId = res.uid;
+          // If the email did NOT change, but the profile has an email and no userId, let's create a login account/link it!
+          if (existingUserId) {
+            submissionData.userId = existingUserId;
+            setModalAlert({
+              text: 'Perfil vinculado com sucesso ao login familiar existente!',
+              type: 'success',
+              onClose: () => onClose()
+            });
+          } else {
+            try {
+              const res = await createStudentAccount(normalizedEmail, profile.id);
+              if (res && res.uid) {
+                submissionData.userId = res.uid;
+              }
+              setModalAlert({ 
+                text: 'Conta de login criada com sucesso no Firebase Authentication para o e-mail cadastrado!', 
+                type: 'success',
+                onClose: () => onClose()
+              });
+            } catch (createErr: any) {
+              console.error("Error creating student account automatically for existing email:", createErr);
+              setModalAlert({
+                text: `Aviso: Perfil atualizado, mas não foi possível gerar as credenciais: ${createErr.message || 'Erro desconhecido'}`,
+                type: 'success',
+                onClose: () => onClose()
+              });
             }
-            setModalAlert({ text: 'Conta de login criada com sucesso no Firebase Authentication para o e-mail cadastrado!', type: 'success' });
-          } catch (createErr: any) {
-            console.error("Error creating student account automatically for existing email:", createErr);
           }
+        } else {
+          // No email change or direct update
+          await profilesApi.update(profile.id, submissionData);
+          onClose();
+          return;
         }
         await profilesApi.update(profile.id, submissionData);
-        onClose();
       } else {
+        // Create new profile flow !
+        if (existingUserId) {
+          submissionData.userId = existingUserId;
+        }
+
         const docRef = await addDoc(collection(db, 'profiles'), {
           ...submissionData,
           createdAt: new Date().toISOString()
         });
 
-        // Automatically create login account only if email is provided
         if (normalizedEmail) {
-          try {
-            await createStudentAccount(normalizedEmail, docRef.id);
-          } catch (accountError: any) {
-            console.error("Error creating student account automatically:", accountError);
-            setModalAlert({ text: `Membro cadastrado, mas erro ao criar conta de acesso (Login): ${accountError.message || 'Erro desconhecido'}`, type: 'error' });
+          if (existingUserId) {
+            setModalAlert({
+              text: 'Membro cadastrado e vinculado com sucesso ao login familiar existente!',
+              type: 'success',
+              onClose: () => onClose()
+            });
+          } else {
+            try {
+              await createStudentAccount(normalizedEmail, docRef.id);
+              setModalAlert({
+                text: 'Membro cadastrado com sucesso e conta de login ativa com a senha padrão "123456"!',
+                type: 'success',
+                onClose: () => onClose()
+              });
+            } catch (accountError: any) {
+              console.error("Error creating student account automatically:", accountError);
+              setModalAlert({ 
+                text: `Membro cadastrado com sucesso, mas houve uma observação de login: ${accountError.message || 'Erro desconhecido'}`, 
+                type: 'success',
+                onClose: () => onClose()
+              });
+            }
           }
+        } else {
+          onClose();
         }
-        onClose();
       }
     } catch (e: any) {
       handleFirestoreError(e, profile ? OperationType.UPDATE : OperationType.CREATE, 'profiles');
@@ -815,7 +892,18 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
     setIsDeleting(true);
     try {
       if (profile.email) {
-        await deleteStudentAccount(profile.email);
+        try {
+          const q = query(collection(db, 'profiles'), where('email', '==', profile.email.trim().toLowerCase()));
+          const querySnapshot = await getDocs(q);
+          const otherProfiles = querySnapshot.docs.filter(d => d.id !== profile.id);
+          if (otherProfiles.length === 0) {
+            await deleteStudentAccount(profile.email);
+          } else {
+            console.log(`Email ${profile.email} is still used by other profiles:`, otherProfiles.map(p => p.id));
+          }
+        } catch (authError) {
+          console.error("Error checking or deleting auth user inside modal:", authError);
+        }
       }
       await deleteDoc(doc(db, 'profiles', profile.id));
       onClose();
