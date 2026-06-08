@@ -56,9 +56,12 @@ export default function StudentView({ activeTab, setActiveTab, forcedProfile }: 
 
     // Fetch user presences
     const unsubPresences = onSnapshot(
-      query(collectionGroup(db, 'presences'), where('memberId', '==', profileId), orderBy('timestamp', 'desc')),
+      query(collectionGroup(db, 'presences'), where('memberId', '==', profileId)),
       (snapshot) => {
-        setUserPresenceList(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Presence)));
+        const list = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Presence));
+        // Sort on client side to avoid index requirement
+        list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        setUserPresenceList(list);
       }
     );
 
@@ -210,7 +213,7 @@ function StudentHome({ profile, classes, payments, schedules, presences, allProf
               presences.slice(0, 10).map((p, idx) => {
                 const classData = classes.find(c => c.id === p.classId);
                 return (
-                  <div key={`${p.id}-${p.classId || idx}`} className="p-4 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center group hover:border-indigo-200 transition-colors">
+                  <div key={`${p.id}-${p.classId || idx}-${idx}`} className="p-4 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center group hover:border-indigo-200 transition-colors">
                     <div className="flex flex-col">
                       <span className="font-bold text-slate-700 text-sm">{classData?.title || 'Treino Geral'}</span>
                       <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-widest">{classData?.type || 'Treino'}</span>
@@ -333,7 +336,7 @@ function FullPresenceHistory({ presences, classes }: { presences: Presence[], cl
               {filtered.map((p, idx) => {
                 const c = classes.find(cl => cl.id === p.classId);
                 return (
-                  <tr key={`${p.id}-${p.classId || idx}`} className="hover:bg-slate-50/50 transition-colors">
+                  <tr key={`${p.id}-${p.classId || idx}-${idx}`} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
                         <span className="font-bold text-slate-900 text-sm">{formatDate(p.timestamp)}</span>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Profile, UserRole, Payment } from '../../types';
 import { db, handleFirestoreError, OperationType, doc } from '../../lib/firebase';
 import { deleteDoc, collection, addDoc, query, where, getDocs, setDoc } from 'firebase/firestore';
-import { Plus, Search, UserPlus, Trash2, Edit2, ShieldAlert, Users, LayoutDashboard, CreditCard, CheckCircle2, XCircle, RefreshCw, AlertTriangle, UserCheck, ShieldCheck, UserX, Trash, Key } from 'lucide-react';
+import { Plus, Search, UserPlus, Trash2, Edit2, ShieldAlert, Users, LayoutDashboard, CreditCard, CheckCircle2, XCircle, RefreshCw, AlertTriangle, UserCheck, ShieldCheck, UserX, Trash, Key, FileDown, Printer } from 'lucide-react';
 import { cn, formatDate } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { profilesApi, paymentsApi } from '../../services/firestoreService';
@@ -42,6 +42,169 @@ export default function MemberManagement({ profiles, payments = [] }: { profiles
       if (roleFilter === 'admin') return p.role === UserRole.ADMIN;
       return true;
     });
+
+  const exportToCSV = () => {
+    const headers = ['Nome Completo', 'Email', 'Cargo', 'Faixa', 'Status', 'Data de Nascimento', 'Telefone', 'Pontos'];
+    const rows = filtered.map(p => [
+      p.fullName || '',
+      p.email || '',
+      p.role === 'admin' ? 'Administrador' : p.role === 'professor' ? 'Professor' : 'Aluno',
+      p.currentGrade || 'Branca',
+      p.status || 'Ativo',
+      p.birthDate || '',
+      p.phoneNumber || '',
+      p.points || 0
+    ]);
+
+    const csvContent = "\uFEFF" + [headers.join(','), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `diretorio_alunos_${view}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportToPDF = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Por favor, permita popups para imprimir o relatório.');
+      return;
+    }
+    
+    const title = `Diretório de Alunos (${view === 'active' ? 'Ativos' : view === 'pending' ? 'Pendentes' : 'Inativos'})`;
+    const dateStr = new Date().toLocaleDateString('pt-BR');
+
+    const rowsHtml = filtered.map((p, idx) => `
+      <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11px;">
+        <td style="padding: 10px 8px; font-weight: bold; color: #1e293b;">${idx + 1}</td>
+        <td style="padding: 10px 8px; font-weight: bold; color: #0f172a;">${p.fullName || ''}</td>
+        <td style="padding: 10px 8px; color: #475569;">${p.email || '-'}</td>
+        <td style="padding: 10px 8px; color: #475569;">${p.phoneNumber || '-'}</td>
+        <td style="padding: 10px 8px;">
+          <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-weight: bold; background-color: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; font-size: 9px; text-transform: uppercase;">
+            ${p.currentGrade || 'Branca'}
+          </span>
+        </td>
+        <td style="padding: 10px 8px; color: #475569;">${p.birthDate ? new Date(p.birthDate).toLocaleDateString('pt-BR') : '-'}</td>
+        <td style="padding: 10px 8px; font-weight: bold; color: #4f46e5;">${p.points || 0} pts</td>
+      </tr>
+    `).join('');
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>${title}</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+            body {
+              font-family: 'Inter', sans-serif;
+              margin: 40px;
+              color: #0f172a;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              border-bottom: 2px solid #0f172a;
+              padding-bottom: 20px;
+              margin-bottom: 30px;
+            }
+            .title {
+              font-size: 24px;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: -0.025em;
+            }
+            .meta {
+              font-size: 11px;
+              font-weight: 600;
+              text-transform: uppercase;
+              color: #64748b;
+              letter-spacing: 0.05em;
+              text-align: right;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 20px;
+            }
+            th {
+              background-color: #f8fafc;
+              color: #475569;
+              text-align: left;
+              padding: 12px 8px;
+              font-size: 11px;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+              border-bottom: 2px solid #cbd5e1;
+            }
+            .footer {
+              margin-top: 50px;
+              border-top: 1px solid #e2e8f0;
+              padding-top: 15px;
+              font-size: 10px;
+              color: #64748b;
+              text-align: center;
+              font-weight: 500;
+            }
+            @media print {
+              body { margin: 20px; }
+              button { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <div style="font-weight: 800; font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; color: #4f46e5; margin-bottom: 4px;">JUDOKA DOJÔ</div>
+              <div class="title">${title}</div>
+            </div>
+            <div class="meta">
+              Gerado em: ${dateStr}<br>
+              Total de alunos: ${filtered.length}
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 40px;">#</th>
+                <th>Nome Completo</th>
+                <th>E-mail</th>
+                <th>Telefone</th>
+                <th>Faixa</th>
+                <th>Data Nasc.</th>
+                <th>Pontos</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+
+          <div class="footer">
+            Judoka Dojô Osasco - Relatório de Registros da Academia
+          </div>
+
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+                window.close();
+              }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   return (
     <div className="space-y-8">
@@ -109,43 +272,64 @@ export default function MemberManagement({ profiles, payments = [] }: { profiles
         />
       </div>
 
-      <div className="flex flex-wrap gap-2 pt-1 pb-2">
-        {[
-          { id: 'all', label: 'Todos os Membros' },
-          { id: 'student', label: 'Alunos' },
-          { id: 'professor', label: 'Professores' },
-          { id: 'admin', label: 'Administradores' }
-        ].map(roleItem => {
-          let count = 0;
-          const baseList = view === 'active' ? activeProfiles : (view === 'pending' ? pendingProfiles : inactiveProfiles);
-          const filteredBySearch = baseList.filter(p => (p.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()) || (p.email || '').toLowerCase().includes(searchTerm.toLowerCase()));
-          
-          if (roleItem.id === 'all') count = filteredBySearch.length;
-          else if (roleItem.id === 'student') count = filteredBySearch.filter(p => !p.role || p.role === UserRole.STUDENT).length;
-          else if (roleItem.id === 'professor') count = filteredBySearch.filter(p => p.role === UserRole.PROFESSOR).length;
-          else if (roleItem.id === 'admin') count = filteredBySearch.filter(p => p.role === UserRole.ADMIN).length;
+      <div className="flex flex-col lg:flex-row gap-4 justify-between lg:items-center">
+        <div className="flex flex-wrap gap-2 pt-1">
+          {[
+            { id: 'all', label: 'Todos os Membros' },
+            { id: 'student', label: 'Alunos' },
+            { id: 'professor', label: 'Professores' },
+            { id: 'admin', label: 'Administradores' }
+          ].map(roleItem => {
+            let count = 0;
+            const baseList = view === 'active' ? activeProfiles : (view === 'pending' ? pendingProfiles : inactiveProfiles);
+            const filteredBySearch = baseList.filter(p => (p.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()) || (p.email || '').toLowerCase().includes(searchTerm.toLowerCase()));
+            
+            if (roleItem.id === 'all') count = filteredBySearch.length;
+            else if (roleItem.id === 'student') count = filteredBySearch.filter(p => !p.role || p.role === UserRole.STUDENT).length;
+            else if (roleItem.id === 'professor') count = filteredBySearch.filter(p => p.role === UserRole.PROFESSOR).length;
+            else if (roleItem.id === 'admin') count = filteredBySearch.filter(p => p.role === UserRole.ADMIN).length;
 
-          return (
-            <button
-              key={roleItem.id}
-              onClick={() => setRoleFilter(roleItem.id as any)}
-              className={cn(
-                "px-4 py-2 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 active:scale-95",
-                roleFilter === roleItem.id 
-                  ? "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/10" 
-                  : "bg-white text-slate-500 border-slate-200 hover:text-slate-700 hover:border-slate-300"
-              )}
-            >
-              <span>{roleItem.label}</span>
-              <span className={cn(
-                "px-1.5 py-0.5 rounded-full text-[10px]",
-                roleFilter === roleItem.id ? "bg-indigo-700 text-indigo-100" : "bg-slate-100 text-slate-500"
-              )}>
-                {count}
-              </span>
-            </button>
-          );
-        })}
+            return (
+              <button
+                key={roleItem.id}
+                onClick={() => setRoleFilter(roleItem.id as any)}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 active:scale-95 cursor-pointer",
+                  roleFilter === roleItem.id 
+                    ? "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/10" 
+                    : "bg-white text-slate-500 border-slate-200 hover:text-slate-700 hover:border-slate-300"
+                )}
+              >
+                <span>{roleItem.label}</span>
+                <span className={cn(
+                  "px-1.5 py-0.5 rounded-full text-[10px]",
+                  roleFilter === roleItem.id ? "bg-indigo-700 text-indigo-100" : "bg-slate-100 text-slate-500"
+                )}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex gap-2 shrink-0">
+          <button
+            onClick={exportToCSV}
+            className="px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer shadow-sm"
+            title="Exportar registros visíveis para formato CSV Excel"
+          >
+            <FileDown className="w-4 h-4 text-slate-500" />
+            <span>Exportar CSV</span>
+          </button>
+          <button
+            onClick={exportToPDF}
+            className="px-3.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-100 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer shadow-sm"
+            title="Imprimir ou Salvar registros em PDF"
+          >
+            <Printer className="w-4 h-4 text-indigo-600" />
+            <span>Imprimir registros / PDF</span>
+          </button>
+        </div>
       </div>
 
       {filtered.length > 0 ? (

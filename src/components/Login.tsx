@@ -12,9 +12,6 @@ import BiometricPrompt from './modules/BiometricPrompt';
 export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -107,124 +104,19 @@ export default function Login() {
       await signInWithEmailAndPassword(auth, loginEmail, password);
     } catch (e: any) {
       console.log("Auth login attempt notice:", e.message || e);
-      // In JS SDK v10+, the error object might have different structures depending on the environment
       const code = e.code || (e.message?.includes('auth/invalid-credential') ? 'auth/invalid-credential' : '');
       
       if (code === 'auth/operation-not-allowed') {
-        setError('Erro: O provedor de E-mail/Senha não está ativo no Console do Firebase. Por favor, ative-o em Authentication > Sign-in method.');
+        setError('Erro: O provedor de E-mail/Senha não está ativo no Console do Firebase.');
       } else if (code === 'auth/invalid-credential' || code === 'auth/user-not-found' || code === 'auth/wrong-password') {
-        // Fallback: This might be the user's first access (pre-registered profile or admin).
-        // Attempt on-the-fly registration with the entered password.
-        try {
-          const userCredential = await createUserWithEmailAndPassword(auth, emailLower, password);
-          if (userCredential.user) {
-            await updateProfile(userCredential.user, { displayName: emailLower.split('@')[0] });
-            setMessage('Seu primeiro acesso foi configurado e você foi conectado com sucesso!');
-            return;
-          }
-        } catch (createErr: any) {
-          console.error("Failed on-the-fly registration fallback:", createErr);
-          if (createErr.code === 'auth/email-already-in-use') {
-            if (emailLower === 'pauloeliasc@gmail.com') {
-              setError('Sua conta administrativa já existe no Firebase! Se você esqueceu a senha, clique em "Esqueceu a senha?" acima, ou use a opção fácil "Entrar com o Google" abaixo para acessar instantaneamente com sua conta.');
-            } else {
-              setError('E-mail ou senha incorretos. Caso tenha esquecido sua senha, por favor use a opção "Esqueceu a senha?" para redefini-la ou tente usar o botão "Entrar com o Google".');
-            }
-          } else if (createErr.code === 'auth/weak-password') {
-            setError('A senha deve ter pelo menos 6 caracteres se este for seu primeiro acesso.');
-          } else if (createErr.code === 'auth/invalid-email') {
-            setError('Por favor, insira um e-mail válido.');
-          } else {
-            setError('E-mail ou senha incorretos. Se você for aluno e este for seu primeiro acesso, a senha padrão é 123456.');
-          }
-          return;
-        }
+        setError('E-mail ou senha incorretos. Se esqueceu sua senha, peça para um administrador redefini-la.');
       } else if (code === 'auth/invalid-email') {
         setError('Por favor, insira um e-mail válido.');
-      } else if (code === 'auth/email-already-in-use') {
-        setError('Este e-mail já possui uma conta. Tente fazer login ou redefinir a senha.');
-      } else if (code === 'auth/weak-password') {
-        setError('A senha deve ter pelo menos 6 caracteres.');
       } else if (code === 'auth/too-many-requests') {
-        setError('Muitas tentativas malsucedidas. Tente novamente mais tarde ou redefina sua senha.');
+        setError('Muitas tentativas malsucedidas. Tente novamente mais tarde ou solicite a redefinição de senha ao administrador.');
       } else {
         setError('Erro no acesso: ' + (e.message || 'Dados inválidos.'));
       }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    setMessage('');
-
-    if (password !== confirmPassword) {
-      setError('As senhas não coincidem.');
-      setLoading(false);
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('A senha deve ter pelo menos 6 caracteres.');
-      setLoading(false);
-      return;
-    }
-
-    if (!fullName.trim()) {
-      setError('Por favor, insira o seu nome completo.');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, username.trim().toLowerCase(), password);
-      if (userCredential.user) {
-        await updateProfile(userCredential.user, { displayName: fullName.trim() });
-      }
-      setMessage('Sua conta foi criada com sucesso! Você já pode entrar no sistema.');
-      setIsRegistering(false);
-    } catch (e: any) {
-      console.log("Cadastro registration attempt notice:", e.message || e);
-      const code = e.code || '';
-      if (code === 'auth/email-already-in-use') {
-        setError('Este e-mail já está em uso por outra conta.');
-      } else if (code === 'auth/invalid-email') {
-        setError('Por favor, insira um e-mail válido.');
-      } else if (code === 'auth/weak-password') {
-        setError('A senha deve ter pelo menos 6 caracteres.');
-      } else {
-        setError('Erro ao criar conta: ' + (e.message || 'Dados inválidos.'));
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleForgotPassword = async () => {
-    if (!username) {
-      setError('Por favor, insira seu e-mail no campo acima para redefinir a senha.');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-    setMessage('');
-
-    try {
-      await sendPasswordResetEmail(auth, username.trim().toLowerCase());
-      setMessage('Link de redefinição enviado! Verifique sua caixa de entrada.');
-    } catch (e: any) {
-      if (e.code === 'auth/user-not-found') {
-        setError('E-mail não encontrado no sistema.');
-      } else if (e.code === 'auth/invalid-email') {
-        setError('E-mail inválido.');
-      } else {
-        setError('Erro ao enviar e-mail: ' + (e.message || 'Erro desconhecido'));
-      }
-      console.log("Forgot password attempt notice:", e.message || e);
     } finally {
       setLoading(false);
     }
@@ -254,7 +146,7 @@ export default function Login() {
             Gestão Inteligente de Academia
           </p>
 
-          <form onSubmit={isRegistering ? handleRegister : handleLogin} className="mt-8 space-y-6">
+          <form onSubmit={handleLogin} className="mt-8 space-y-6">
             {error && (
               <div className="p-4 rounded-xl text-xs font-bold text-center border bg-rose-50 text-rose-700 border-rose-100">
                 {error}
@@ -268,25 +160,6 @@ export default function Login() {
             )}
 
             <div className="space-y-4">
-              {isRegistering && (
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">
-                    Nome Completo
-                  </label>
-                  <div className="relative">
-                    <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-                    <input 
-                      type="text"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 pl-11 pr-4 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-base transition-all"
-                      placeholder="Seu nome completo"
-                      required
-                    />
-                  </div>
-                </div>
-              )}
-
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">
                   E-mail
@@ -309,15 +182,6 @@ export default function Login() {
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                     Senha
                   </label>
-                  {!isRegistering && (
-                    <button 
-                      type="button"
-                      onClick={handleForgotPassword}
-                      className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 hover:text-indigo-600 transition-colors"
-                    >
-                      Esqueceu a senha?
-                    </button>
-                  )}
                 </div>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
@@ -331,52 +195,17 @@ export default function Login() {
                   />
                 </div>
               </div>
-
-              {isRegistering && (
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">
-                    Confirmar Senha
-                  </label>
-                  <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-                    <input 
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 pl-11 pr-4 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-base transition-all"
-                      placeholder="Repita sua senha"
-                      required
-                    />
-                  </div>
-                </div>
-              )}
             </div>
 
             <button 
               type="submit"
               disabled={loading}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold transition-all shadow-lg shadow-indigo-600/20 active:scale-[0.98] disabled:opacity-50"
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold transition-all shadow-lg shadow-indigo-600/20 active:scale-[0.98] disabled:opacity-50 cursor-pointer"
             >
-              {loading ? 'Processando...' : (isRegistering ? 'Criar Nova Conta' : 'Entrar no Sistema')}
+              {loading ? 'Processando...' : 'Entrar no Sistema'}
             </button>
 
-
-
-            <div className="text-center pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsRegistering(!isRegistering);
-                  setError('');
-                  setMessage('');
-                }}
-                className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 transition-colors"
-              >
-                {isRegistering ? 'Já tem uma conta? Faça login' : 'Não tem uma conta? Cadastre-se'}
-              </button>
-            </div>
-
-            {!isRegistering && biometricSupported && hasBiometrics && (
+            {biometricSupported && hasBiometrics && (
               <div className="pt-2">
                 <button 
                   type="button"

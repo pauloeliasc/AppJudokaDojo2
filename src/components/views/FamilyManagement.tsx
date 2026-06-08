@@ -86,7 +86,9 @@ export default function FamilyManagement() {
 
   const today = new Date();
   const dayOfWeek = today.getDay();
-  const dateStr = today.toISOString().split('T')[0];
+  const dateStr = today.getFullYear() + '-' + 
+    String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+    String(today.getDate()).padStart(2, '0');
 
   // Filter today's possible classes
   const todaySchedules = schedules.filter(s => s.dayOfWeek === dayOfWeek);

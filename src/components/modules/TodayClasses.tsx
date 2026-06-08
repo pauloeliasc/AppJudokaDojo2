@@ -14,12 +14,9 @@ interface TodayClassesProps {
 
 export default function TodayClasses({ profile, classes, schedules }: TodayClassesProps) {
   const [loading, setLoading] = useState<string | null>(null);
-  const [userPresences, setUserPresences] = useState<Record<string, boolean>>({});
   const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
   const [allTodayPresences, setAllTodayPresences] = useState<Presence[]>([]);
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
-
-  const isAdminOrProfessor = profile?.role === UserRole.ADMIN || profile?.role === UserRole.PROFESSOR;
 
   const today = new Date();
   const dayOfWeek = today.getDay();
@@ -28,28 +25,95 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
     String(today.getMonth() + 1).padStart(2, '0') + '-' + 
     String(today.getDate()).padStart(2, '0');
 
-  useEffect(() => {
-    if (!profile) return;
-    
-    // Fetch all check-ins for this user today (across all classes)
-    const q = query(
-      collectionGroup(db, 'presences'),
-      where('memberId', '==', profile.id),
-      where('checkInDate', '==', dateStr)
-    );
+  const [panelDate, setPanelDate] = useState<string>(dateStr);
+  const [panelClassId, setPanelClassId] = useState<string>('');
+  const [panelPresences, setPanelPresences] = useState<Presence[]>([]);
 
-    const unsub = onSnapshot(q, (snapshot) => {
-      const pMap: Record<string, boolean> = {};
-      snapshot.docs.forEach(doc => {
-        pMap[doc.data().classId] = true;
+  const isAdminOrProfessor = profile?.role === UserRole.ADMIN || profile?.role === UserRole.PROFESSOR;
+
+  // Subscribe in real-time to check-ins matching target date and target physical classes
+  useEffect(() => {
+    const targetDateClasses = classes.filter(c => c.date === panelDate);
+    
+    if (targetDateClasses.length === 0) {
+      setPanelPresences([]);
+      return;
+    }
+
+    const presencesByClass: Record<string, Presence[]> = {};
+    
+    const unsubs = targetDateClasses.map(c => {
+      const presenceCol = collection(db, `classes/${c.id}/presences`);
+      return onSnapshot(presenceCol, (snapshot) => {
+        const classPres = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Presence));
+        presencesByClass[c.id] = classPres;
+        
+        // Flatten and update state reactively
+        const flattened = Object.values(presencesByClass).flat();
+        setPanelPresences(flattened);
+      }, (error) => {
+        console.error(`Error loading custom panel presences for class ${c.id}:`, error);
       });
-      setUserPresences(pMap);
-    }, (error) => {
-      console.error("Presences snapshot error:", error);
     });
 
-    return unsub;
-  }, [profile, dateStr]);
+    return () => {
+      unsubs.forEach(unsub => unsub());
+    };
+  }, [classes, panelDate]);
+
+  // Load allTodayPresences by registering subcollection listeners on today's classes
+  useEffect(() => {
+    // Get all class sessions for today
+    const todaySessions = classes.filter(c => c.date === dateStr);
+    
+    if (todaySessions.length === 0) {
+      setAllTodayPresences([]);
+      return;
+    }
+
+    // Keep track of presences by classId to combine them
+    const presencesByClass: Record<string, Presence[]> = {};
+
+    const unsubs = todaySessions.map(c => {
+      const presenceCol = collection(db, `classes/${c.id}/presences`);
+      return onSnapshot(presenceCol, (snapshot) => {
+        const classPres = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Presence));
+        presencesByClass[c.id] = classPres;
+        
+        // Flatten all presences across today's classes
+        const flattened = Object.values(presencesByClass).flat();
+        setAllTodayPresences(flattened);
+      }, (error) => {
+        console.error(`Error loading presences for class ${c.id}:`, error);
+      });
+    });
+
+    return () => {
+      unsubs.forEach(unsub => unsub());
+    };
+  }, [classes, dateStr]);
+
+  // Derive userPresences dynamically from allTodayPresences
+  const userPresences = React.useMemo(() => {
+    const pMap: Record<string, boolean> = {};
+    if (profile) {
+      allTodayPresences.forEach(p => {
+        if (p.memberId === profile.id) {
+          pMap[p.classId] = true;
+        }
+      });
+    }
+    return pMap;
+  }, [allTodayPresences, profile]);
+
+  // Derive presenceCounts dynamically from allTodayPresences
+  const presenceCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    allTodayPresences.forEach(p => {
+      counts[p.classId] = (counts[p.classId] || 0) + 1;
+    });
+    return counts;
+  }, [allTodayPresences]);
 
   // Fetch all profiles for mapping names in check-in panel
   useEffect(() => {
@@ -60,32 +124,6 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
     });
     return unsub;
   }, []);
-
-  // Fetch counts and full list for all classes today
-  const [presenceCounts, setPresenceCounts] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    const q = query(
-      collectionGroup(db, 'presences'),
-      where('checkInDate', '==', dateStr)
-    );
-
-    const unsub = onSnapshot(q, (snapshot) => {
-      const counts: Record<string, number> = {};
-      const presences: Presence[] = [];
-      snapshot.docs.forEach(doc => {
-        const data = doc.data() as Presence;
-        counts[data.classId] = (counts[data.classId] || 0) + 1;
-        presences.push({ id: doc.id, ...data });
-      });
-      setPresenceCounts(counts);
-      setAllTodayPresences(presences);
-    }, (error) => {
-      console.error("Presence counts error:", error);
-    });
-
-    return unsub;
-  }, [dateStr]);
 
   // Classes for today based on schedule
   const todaySchedules = schedules.filter(s => s.dayOfWeek === dayOfWeek);
@@ -249,7 +287,7 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
 
                         return (
                           <div
-                            key={p.id || pIdx}
+                            key={`${p.id || pIdx}-${pIdx}`}
                             className={cn(
                               "flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold select-none border transition-all",
                               isMe 
@@ -321,63 +359,147 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
         })}
       </div>
 
-      {allTodayPresences.length > 0 && (
-        <div className="mt-12 border-t border-slate-100 pt-10">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
-              <Users className="w-5 h-5" />
+      <div className="mt-12 border-t border-slate-100 pt-10">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+              <Users className="w-5 h-5 animate-pulse" />
             </div>
             <div>
-              <h3 className="font-bold text-lg text-slate-900 leading-tight">Painel de Presenças</h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Lista de alunos que treinaram hoje</p>
-            </div>
-            <div className="ml-auto bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
-              {allTodayPresences.length} {allTodayPresences.length === 1 ? 'Check-in' : 'Check-ins'}
+              <h3 className="font-bold text-lg text-slate-900 leading-tight flex items-center gap-2">
+                Presenças em Tempo Real
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+              </h3>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Veja quem treinou ou está treinando hoje ou em outra data</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {allTodayPresences.map((p, idx) => {
-              const studentProfile = allProfiles.find(prof => prof.id === p.memberId);
-              const classData = classes.find(c => c.id === p.classId);
-              const isMe = profile && p.memberId === profile.id;
-              const isPrivate = studentProfile?.isPrivateProfile;
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-3">
+            {/* Date filter select */}
+            <div className="flex flex-col min-w-[120px]">
+              <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider mb-1 ml-0.5">Filtrar por Data</label>
+              <input 
+                type="date"
+                value={panelDate}
+                onChange={(e) => {
+                  setPanelDate(e.target.value);
+                  setPanelClassId(''); // Reset selected class on date swap
+                }}
+                className="bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none transition-all cursor-pointer"
+              />
+            </div>
 
-              const displayName = isMe
-                ? (isPrivate ? "Você (Oculto para colegas)" : "Você")
-                : (isPrivate ? "Colega Oculto" : (studentProfile?.fullName || 'Visitante'));
-
-              const showPhoto = !isPrivate || isMe;
-              
-              return (
-                <div key={`${p.id}-${p.classId || idx}`} className="flex items-center gap-4 p-4 bg-slate-50 border border-slate-100 rounded-2xl group hover:border-emerald-200 hover:bg-white transition-all">
-                  <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold overflow-hidden border-2 border-white shadow-sm flex-shrink-0">
-                    {showPhoto && studentProfile?.photoUrl ? (
-                      <img src={studentProfile.photoUrl} alt={displayName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    ) : isPrivate ? (
-                      <Lock className="w-4 h-4 text-slate-400" />
-                    ) : (
-                      displayName.charAt(0)
-                    )}
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className={cn(
-                      "font-bold text-slate-800 text-sm truncate",
-                      isPrivate && !isMe && "text-slate-400 italic"
-                    )}>{displayName}</span>
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-tight truncate">
-                        {classData?.title || 'Aula'}
-                      </span>
-                      <span className="text-[8px] text-slate-400 font-bold">às {classData?.time || '--:--'}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {/* Class/Turma filter select */}
+            <div className="flex flex-col min-w-[170px] flex-1">
+              <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider mb-1 ml-0.5">Filtrar por Turma/Treino</label>
+              <select
+                value={panelClassId}
+                onChange={(e) => setPanelClassId(e.target.value)}
+                className="bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none transition-all cursor-pointer"
+              >
+                <option value="">Todos os Treinos</option>
+                {classes
+                  .filter(c => c.date === panelDate)
+                  .map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.time} - {c.title || `Treino (${c.type})`}
+                    </option>
+                  ))
+                }
+              </select>
+            </div>
           </div>
         </div>
-      )}
+
+        {/* Display filtered results */}
+        {panelPresences.length === 0 ? (
+          <div className="bg-slate-50/50 border border-dashed border-slate-200 rounded-3xl p-10 text-center">
+            <Users className="w-8 h-8 text-slate-300 mx-auto mb-2.5" />
+            <h5 className="font-extrabold text-sm text-slate-800 uppercase tracking-wide">Sem registro de presença</h5>
+            <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">Nenhum aluno realizou check-in para sessões de treino na data selecionada ({panelDate}).</p>
+          </div>
+        ) : (
+          (() => {
+            const finalFiltered = panelClassId 
+              ? panelPresences.filter(p => p.classId === panelClassId)
+              : panelPresences;
+
+            if (finalFiltered.length === 0) {
+              return (
+                <div className="bg-slate-50/50 border border-dashed border-slate-200 rounded-3xl p-10 text-center">
+                  <Users className="w-8 h-8 text-slate-300 mx-auto mb-2.5" />
+                  <h5 className="font-extrabold text-sm text-slate-800 uppercase tracking-wide">Nenhuma presença nesta turma</h5>
+                  <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">Nesta turma específica ainda não constam presenças gravadas para o dia selecionado.</p>
+                </div>
+              );
+            }
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in">
+                {finalFiltered.map((p, idx) => {
+                  const studentProfile = allProfiles.find(prof => prof.id === p.memberId);
+                  const classData = classes.find(c => c.id === p.classId);
+                  const isMe = profile && p.memberId === profile.id;
+                  const isPrivate = studentProfile?.isPrivateProfile;
+
+                  const displayName = isMe
+                    ? (isPrivate ? "Você (Oculto para colegas)" : "Você")
+                    : (isPrivate ? "Colega Oculto" : (studentProfile?.fullName || 'Visitante'));
+
+                  const showPhoto = !isPrivate || isMe;
+                  const checkInTime = p.timestamp ? new Date(p.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+
+                  return (
+                    <div 
+                      key={`${p.id}-${p.classId || idx}-${idx}`} 
+                      className={cn(
+                        "flex items-center gap-4 p-4 border rounded-2xl group hover:shadow-md transition-all",
+                        isMe 
+                          ? "bg-emerald-50/50 border-emerald-100 hover:border-emerald-200" 
+                          : "bg-white border-slate-100 hover:border-slate-200"
+                      )}
+                    >
+                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 font-extrabold overflow-hidden border border-slate-150 shadow-sm shrink-0">
+                        {showPhoto && studentProfile?.photoUrl ? (
+                          <img 
+                            src={studentProfile.photoUrl} 
+                            alt={displayName} 
+                            className="w-full h-full object-cover" 
+                            referrerPolicy="no-referrer" 
+                          />
+                        ) : isPrivate ? (
+                          <Lock className="w-4 h-4 text-slate-400" />
+                        ) : (
+                          displayName.charAt(0).toUpperCase()
+                        )}
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className={cn(
+                          "font-bold text-slate-800 text-sm truncate",
+                          isPrivate && !isMe && "text-slate-400 italic"
+                        )}>
+                          {displayName}
+                        </span>
+                        <div className="flex flex-col mt-0.5">
+                          <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-tight truncate leading-none">
+                            {classData?.title || 'Aula/' + (classData?.type || 'Treino')}
+                          </span>
+                          <span className="text-[8px] text-slate-400 font-medium mt-0.5">
+                            Check-in às {checkInTime || classData?.time || '--:--'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()
+        )}
+      </div>
     </div>
   );
 }

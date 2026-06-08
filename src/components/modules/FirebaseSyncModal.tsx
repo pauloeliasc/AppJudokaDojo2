@@ -75,9 +75,14 @@ export default function FirebaseSyncModal({ profiles, onClose }: FirebaseSyncMod
       }
     });
 
-    // Filter emailMap to only get actual duplicates
+    // Filter emailMap to only get actual duplicates that are not yet unified (have different or missing userIds)
     const duplicatesList = Object.entries(emailMap)
-      .filter(([_, items]) => items.length > 1)
+      .filter(([_, items]) => {
+        if (items.length <= 1) return false;
+        const firstUid = items[0].userId;
+        const isUnified = !!firstUid && items.every(p => p.userId && p.userId === firstUid);
+        return !isUnified;
+      })
       .map(([email, items]) => ({ email, items }));
 
     setDuplicates(duplicatesList);
@@ -133,11 +138,12 @@ export default function FirebaseSyncModal({ profiles, onClose }: FirebaseSyncMod
     setError('');
     setFailedPasswordResetEmail(null);
     try {
-      await createStudentAccount(email, profileId);
+      const res = await createStudentAccount(email, profileId);
       setStatusMessage('Sucesso! Conta criada com senha padrão: 123456');
+      const actualUid = (res && res.uid) ? res.uid : 'linked_temp';
       // Update local state to trigger recalculations
       setLocalProfiles(prev => 
-        prev.map(p => p.id === profileId ? { ...p, userId: 'linked_temp' } : p)
+        prev.map(p => p.id === profileId ? { ...p, userId: actualUid } : p)
       );
     } catch (err: any) {
       console.error(err);
@@ -236,7 +242,7 @@ export default function FirebaseSyncModal({ profiles, onClose }: FirebaseSyncMod
         className="bg-white w-full max-w-4xl rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[85vh] border border-slate-100"
       >
         {/* Header */}
-        <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
+        <div className="px-5 sm:px-8 py-4 sm:py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
               <RefreshCw className="w-6 h-6 animate-spin-slow" />
@@ -256,7 +262,7 @@ export default function FirebaseSyncModal({ profiles, onClose }: FirebaseSyncMod
         </div>
 
         {/* Content Body */}
-        <div className="p-8 overflow-y-auto flex-1 space-y-8">
+        <div className="p-4 sm:p-8 overflow-y-auto flex-1 space-y-6 sm:space-y-8">
           
           {/* Top Status & Error Indicators */}
           {statusMessage && (
@@ -407,8 +413,8 @@ export default function FirebaseSyncModal({ profiles, onClose }: FirebaseSyncMod
                       </button>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {dup.items.map((it) => (
-                        <div key={it.id} className="bg-white p-4 rounded-xl border border-slate-100 flex items-center justify-between shadow-sm">
+                      {dup.items.map((it, idx) => (
+                        <div key={`${it.id}-${idx}`} className="bg-white p-4 rounded-xl border border-slate-100 flex items-center justify-between shadow-sm">
                           <div>
                             <span className="text-xs font-bold text-slate-800 block leading-tight">{it.fullName}</span>
                             <span className="text-[9px] font-bold text-slate-400 block uppercase tracking-wide mt-1">
@@ -444,8 +450,8 @@ export default function FirebaseSyncModal({ profiles, onClose }: FirebaseSyncMod
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {unlinked.map((it) => (
-                  <div key={it.id} className="bg-white p-4.5 rounded-2.5xl border border-slate-150 flex items-center justify-between hover:border-slate-300 transition-all shadow-sm">
+                {unlinked.map((it, idx) => (
+                  <div key={`${it.id}-${idx}`} className="bg-white p-4.5 rounded-2.5xl border border-slate-150 flex items-center justify-between hover:border-slate-300 transition-all shadow-sm">
                     <div>
                       <span className="text-xs font-black text-slate-800 block leading-tight">{it.fullName}</span>
                       <span className="text-[10px] text-slate-500 font-mono block mt-1">{it.email}</span>
@@ -490,8 +496,8 @@ export default function FirebaseSyncModal({ profiles, onClose }: FirebaseSyncMod
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {inactivesWithAuth.map((it) => (
-                  <div key={it.id} className="bg-slate-50 p-4.5 rounded-2.5xl border border-slate-150 flex items-center justify-between hover:border-slate-300 transition-all shadow-sm">
+                {inactivesWithAuth.map((it, idx) => (
+                  <div key={`${it.id}-${idx}`} className="bg-slate-50 p-4.5 rounded-2.5xl border border-slate-150 flex items-center justify-between hover:border-slate-300 transition-all shadow-sm">
                     <div>
                       <span className="text-xs font-black text-slate-400 block leading-tight">{it.fullName}</span>
                       <span className="text-[10px] text-slate-400 font-mono block mt-1">{it.email || "Sem e-mail"}</span>

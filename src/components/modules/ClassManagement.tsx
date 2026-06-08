@@ -30,7 +30,10 @@ export default function ClassManagement({ classes, profiles }: { classes: ClassS
   const activeClass = classes.find(c => c.id === selectedClassId);
 
   const handleCreateSessionFromSchedule = async (schedule: Schedule) => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const todayStr = now.getFullYear() + '-' + 
+      String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+      String(now.getDate()).padStart(2, '0');
     try {
       const newSession: Omit<ClassSession, 'id'> = {
         title: `Treino de ${DAYS[schedule.dayOfWeek]}`,
@@ -135,7 +138,10 @@ export default function ClassManagement({ classes, profiles }: { classes: ClassS
                             <button 
                               onClick={() => {
                                 // Find or create session for this schedule + today
-                                const todayStr = new Date().toISOString().split('T')[0];
+                                const now = new Date();
+                                const todayStr = now.getFullYear() + '-' + 
+                                  String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                                  String(now.getDate()).padStart(2, '0');
                                 const existingSession = classes.find(c => c.scheduleId === s.id && c.date.startsWith(todayStr));
                                 if (existingSession) {
                                   setSelectedClassId(existingSession.id);
@@ -837,7 +843,10 @@ function PresenceModal({ session, profiles, onClose }: { session: ClassSession, 
           await profilesApi.update(studentId, { points: Math.max(0, (currentStudent.points || 0) - 10) });
         }
       } else {
-        const todayStr = new Date().toISOString().split('T')[0];
+        const now = new Date();
+        const todayStr = now.getFullYear() + '-' + 
+          String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+          String(now.getDate()).padStart(2, '0');
         await setDoc(presenceRef, {
           memberId: studentId,
           classId: session.id,
