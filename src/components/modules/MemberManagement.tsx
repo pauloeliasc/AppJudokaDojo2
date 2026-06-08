@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Profile, UserRole, Payment } from '../../types';
 import { db, handleFirestoreError, OperationType, doc } from '../../lib/firebase';
 import { deleteDoc, collection, addDoc, query, where, getDocs, setDoc } from 'firebase/firestore';
-import { Plus, Search, UserPlus, Trash2, Edit2, ShieldAlert, Users, LayoutDashboard, CreditCard, CheckCircle2, XCircle, RefreshCw, AlertTriangle, UserCheck, ShieldCheck, UserX, Trash } from 'lucide-react';
+import { Plus, Search, UserPlus, Trash2, Edit2, ShieldAlert, Users, LayoutDashboard, CreditCard, CheckCircle2, XCircle, RefreshCw, AlertTriangle, UserCheck, ShieldCheck, UserX, Trash, Key } from 'lucide-react';
 import { cn, formatDate } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { profilesApi, paymentsApi } from '../../services/firestoreService';
@@ -625,6 +625,7 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
   const [modalAlert, setModalAlert] = useState<{ text: string, type: 'success' | 'error', onClose?: () => void } | null>(null);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [showConfirmDuplicateEmail, setShowConfirmDuplicateEmail] = useState(false);
+  const [showConfirmResetPassword, setShowConfirmResetPassword] = useState(false);
 
   const handleResetPassword = async () => {
     if (!profile?.email) return;
@@ -1031,7 +1032,7 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
                 <div className="flex flex-wrap gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={handleResetPassword}
+                    onClick={() => setShowConfirmResetPassword(true)}
                     disabled={isResettingPassword || isSendingResetEmail}
                     className="flex-1 min-w-[200px] bg-slate-800 text-white rounded-xl py-2.5 px-4 text-xs font-bold hover:bg-slate-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 cursor-pointer"
                   >
@@ -1308,6 +1309,37 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
                 className="flex-1 bg-rose-500 hover:bg-rose-600 text-white rounded-xl py-3 text-xs font-bold transition-all cursor-pointer"
               >
                 Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showConfirmResetPassword && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex flex-col justify-center items-center p-6 z-[200] text-center text-white">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col items-center">
+            <Key className="w-12 h-12 text-amber-500 mb-4 animate-bounce" />
+            <h5 className="font-extrabold text-base uppercase tracking-wider mb-2 text-white">Confirmar Reset de Senha</h5>
+            <p className="text-xs text-slate-300 mb-6 leading-relaxed">
+              voce tem certeza que quer voltar a senha desse usuario para a senha original, 123456?
+            </p>
+            <div className="flex gap-3 w-full">
+              <button 
+                type="button"
+                onClick={() => setShowConfirmResetPassword(false)}
+                className="flex-1 bg-white/10 hover:bg-white/20 text-white rounded-xl py-3 text-xs font-bold transition-all cursor-pointer"
+              >
+                Não, Cancelar
+              </button>
+              <button 
+                type="button"
+                onClick={async () => {
+                  setShowConfirmResetPassword(false);
+                  await handleResetPassword();
+                }}
+                className="flex-1 bg-amber-500 hover:bg-amber-600 text-white rounded-xl py-3 text-xs font-bold transition-all cursor-pointer shadow-lg shadow-amber-500/20"
+              >
+                Sim, Redefinir
               </button>
             </div>
           </div>

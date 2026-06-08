@@ -1,7 +1,9 @@
 import { initializeApp, deleteApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, updatePassword, signOut, signInWithEmailAndPassword, deleteUser, updateEmail, sendPasswordResetEmail } from 'firebase/auth';
+import { getAuth, initializeAuth, inMemoryPersistence, createUserWithEmailAndPassword, updatePassword, signOut, signInWithEmailAndPassword, deleteUser, updateEmail, sendPasswordResetEmail } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { profilesApi } from './firestoreService';
+import { doc, getDoc, setDoc, query, where, getDocs, updateDoc, collection } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 /**
  * Creates a student account in Firebase Auth without logging out the current admin.
@@ -9,12 +11,26 @@ import { profilesApi } from './firestoreService';
  * If the account already exists, it tries to login with the default password to link it.
  */
 export async function createStudentAccount(email: string, profileId: string) {
+  const emailLower = email.trim().toLowerCase();
+  let targetEmail = emailLower;
+  try {
+    const docRef = doc(db, 'auth_resets', emailLower);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      targetEmail = docSnap.data().resetAuthEmail;
+    }
+  } catch (err) {
+    console.warn('Error checking existing active reset email in createStudentAccount:', err);
+  }
+
   const secondaryAppName = `secondary-app-create-${Date.now()}`;
   const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
-  const secondaryAuth = getAuth(secondaryApp);
+  const secondaryAuth = initializeAuth(secondaryApp, {
+    persistence: inMemoryPersistence
+  });
   
   try {
-    const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, '123456');
+    const userCredential = await createUserWithEmailAndPassword(secondaryAuth, targetEmail, '123456');
     const uid = userCredential.user.uid;
     
     // Update the profile with the new userId
@@ -30,7 +46,7 @@ export async function createStudentAccount(email: string, profileId: string) {
     if (error.code === 'auth/email-already-in-use') {
       try {
         console.log('Email already exists in Firebase Auth. Checking if we can authenticate with default password to link the profile...');
-        const userCredential = await signInWithEmailAndPassword(secondaryAuth, email, '123456');
+        const userCredential = await signInWithEmailAndPassword(secondaryAuth, targetEmail, '123456');
         const uid = userCredential.user.uid;
         
         await profilesApi.update(profileId, { userId: uid });
@@ -58,13 +74,27 @@ export async function createStudentAccount(email: string, profileId: string) {
  * because client-side SDK cannot delete other users by UID without Admin SDK.
  */
 export async function deleteStudentAccount(email: string) {
+  const emailLower = email.trim().toLowerCase();
+  let targetEmail = emailLower;
+  try {
+    const docRef = doc(db, 'auth_resets', emailLower);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      targetEmail = docSnap.data().resetAuthEmail;
+    }
+  } catch (err) {
+    console.warn('Error checking existing active reset email in deleteStudentAccount:', err);
+  }
+
   const secondaryAppName = `secondary-app-delete-${Date.now()}`;
   const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
-  const secondaryAuth = getAuth(secondaryApp);
+  const secondaryAuth = initializeAuth(secondaryApp, {
+    persistence: inMemoryPersistence
+  });
 
   try {
     // Attempt to sign in with the default password to delete
-    const userCredential = await signInWithEmailAndPassword(secondaryAuth, email, '123456');
+    const userCredential = await signInWithEmailAndPassword(secondaryAuth, targetEmail, '123456');
     await deleteUser(userCredential.user);
     await deleteApp(secondaryApp);
     return { success: true };
@@ -90,7 +120,9 @@ export async function changePassword(newPassword: string) {
 export async function updateStudentEmail(oldEmail: string, newEmail: string, currentPassword?: string, profileId?: string) {
   const secondaryAppName = `secondary-app-email-update-${Date.now()}`;
   const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
-  const secondaryAuth = getAuth(secondaryApp);
+  const secondaryAuth = initializeAuth(secondaryApp, {
+    persistence: inMemoryPersistence
+  });
   
   try {
     const pwd = currentPassword || '123456';
@@ -140,44 +172,97 @@ export async function updateStudentEmail(oldEmail: string, newEmail: string, cur
 }
 
 /**
- * Resets a student's password back to '123456' by signing in and updating the password.
+ * Resets a student's password back to '123456'.
+ * If login with '123456' on the active email fails, a custom unique subaddress reset account (+reset)
+ * is generated and mapped securely in the 'auth_resets' database collection, so they can login immediately.
  */
 export async function resetStudentPassword(email: string, currentPassword?: string) {
+  const emailLower = email.trim().toLowerCase();
+  
+  // 1. Check if there is already a resetAuthEmail registered in the database for this email
+  let activeEmail = emailLower;
+  try {
+    const docRef = doc(db, 'auth_resets', emailLower);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      activeEmail = docSnap.data().resetAuthEmail;
+    }
+  } catch (err) {
+    console.warn('Error checking existing active reset email:', err);
+  }
+
   const secondaryAppName = `secondary-app-pword-reset-${Date.now()}`;
   const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
-  const secondaryAuth = getAuth(secondaryApp);
-  
+  const secondaryAuth = initializeAuth(secondaryApp, {
+    persistence: inMemoryPersistence
+  });
+
   try {
+    // Attempt sign in with either the current provided password or default '123456'
     const pwd = currentPassword || '123456';
-    const userCredential = await signInWithEmailAndPassword(secondaryAuth, email, pwd);
-    await updatePassword(userCredential.user, '123456');
+    const userCredential = await signInWithEmailAndPassword(secondaryAuth, activeEmail, pwd);
+    
+    // If sign in is successful and password is not '123456', update it to '123456'
+    if (pwd !== '123456') {
+      await updatePassword(userCredential.user, '123456');
+    }
     
     await signOut(secondaryAuth);
     await deleteApp(secondaryApp);
     return { success: true };
   } catch (error: any) {
-    if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
+    console.log('Reset attempt sign-in on active account failed. Proceeding with fresh reset-email creation to override...', error.message || error);
+    
+    // Create a new, unique firebase account that bypasses the "email in use" problem
+    const parts = emailLower.split('@');
+    const localPart = parts[0];
+    const domainPart = parts[1] || 'gym.com';
+    const resetEmail = `${localPart}+reset${Date.now()}@${domainPart}`;
+    
+    try {
+      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, resetEmail, '123456');
+      const newUid = userCredential.user.uid;
+      
+      // Step A: Update the auth_resets mapping in Firestore
       try {
-        console.log('Account may not exist, attempting to create auth account with default password instead of resetting...');
-        await createUserWithEmailAndPassword(secondaryAuth, email, '123456');
-        await signOut(secondaryAuth);
-        await deleteApp(secondaryApp);
-        return { success: true };
-      } catch (createError: any) {
-        if (createError.code === 'auth/email-already-in-use') {
-          console.warn('Account already exists with changed password, cannot reset without current user password.');
-          await deleteApp(secondaryApp);
-          throw new Error('A conta do aluno já existe e a senha padrão não funciona (senha atualizada). Preencha a senha atual do aluno para podermos redefini-la.');
-        } else {
-          console.warn('Failed fallback account creation on password reset:', createError.message || createError);
-          await deleteApp(secondaryApp);
-          throw createError;
-        }
+        await setDoc(doc(db, 'auth_resets', emailLower), {
+          resetAuthEmail: resetEmail,
+          updatedAt: new Date().toISOString()
+        });
+      } catch (err: any) {
+        console.error('Failed to write to auth_resets mapping:', err);
+        throw new Error(`Erro ao salvar mapeamento de redefinição no Firestore (auth_resets): ${err.message || err}`);
       }
+      
+      // Step B: Query ALL profiles in Firestore using this original email
+      let querySnapshot;
+      try {
+        const q = query(collection(db, 'profiles'), where('email', '==', emailLower));
+        querySnapshot = await getDocs(q);
+      } catch (err: any) {
+        console.error('Failed to query profiles:', err);
+        throw new Error(`Erro ao buscar perfis do aluno no Firestore: ${err.message || err}`);
+      }
+      
+      // Step C: Update profiles with the new userId
+      try {
+        const updatePromises = querySnapshot.docs.map(async (docSnapshot) => {
+          await updateDoc(docSnapshot.ref, { userId: newUid });
+        });
+        await Promise.all(updatePromises);
+      } catch (err: any) {
+        console.error('Failed to update student profile matching UID:', err);
+        throw new Error(`Erro ao atualizar o UID no perfil do aluno no Firestore: ${err.message || err}`);
+      }
+      
+      await signOut(secondaryAuth);
+      await deleteApp(secondaryApp);
+      return { success: true };
+    } catch (createError: any) {
+      console.error('Error creating new reset account:', createError.message || createError);
+      await deleteApp(secondaryApp);
+      throw createError;
     }
-    console.warn('Error resetting student password to 123456:', error.message || error);
-    await deleteApp(secondaryApp);
-    throw error;
   }
 }
 

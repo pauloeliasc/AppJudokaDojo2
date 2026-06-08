@@ -54,7 +54,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       setLoading(true);
-      const email = firebaseUser.email?.toLowerCase().trim() || '';
+      const rawEmail = firebaseUser.email?.toLowerCase().trim() || '';
+      const email = rawEmail.replace(/\+reset\d+@/, '@');
 
       // Set up real-time listener for ALL profiles with this email (family members)
       const q = query(collection(db, 'profiles'), where('email', '==', email));
@@ -108,7 +109,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    const email = firebaseUser.email?.toLowerCase().trim() || '';
+    const rawEmail = firebaseUser.email?.toLowerCase().trim() || '';
+    const email = rawEmail.replace(/\+reset\d+@/, '@');
     const isAdminEmail = email === 'pauloeliasc@gmail.com' || email === 'judokadojoosasco@gmail.com';
 
     unsubscribeProfile = onSnapshot(doc(db, 'profiles', activeProfileId), async (docSnapshot) => {

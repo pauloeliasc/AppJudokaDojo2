@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { auth, db, doc } from '../lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, updateProfile, GoogleAuthProvider, OAuthProvider, signInWithPopup } from 'firebase/auth';
-import { setDoc, getDocs, collection, query, where } from 'firebase/firestore';
+import { setDoc, getDocs, collection, query, where, getDoc } from 'firebase/firestore';
 import { UserRole } from '../types';
 import { motion } from 'motion/react';
 import { User as UserIcon, Lock, Shield, GraduationCap, Users, Fingerprint, Chrome, Mail, Globe } from 'lucide-react';
@@ -92,8 +92,19 @@ export default function Login() {
 
     const emailLower = username.trim().toLowerCase();
 
+    // Check if there is an active reset email mapping (so students with reset passwords can login)
+    let loginEmail = emailLower;
     try {
-      await signInWithEmailAndPassword(auth, emailLower, password);
+      const resetSnap = await getDoc(doc(db, 'auth_resets', emailLower));
+      if (resetSnap.exists()) {
+        loginEmail = resetSnap.data().resetAuthEmail;
+      }
+    } catch (e) {
+      console.warn("Could not check auth_resets mapping:", e);
+    }
+
+    try {
+      await signInWithEmailAndPassword(auth, loginEmail, password);
     } catch (e: any) {
       console.log("Auth login attempt notice:", e.message || e);
       // In JS SDK v10+, the error object might have different structures depending on the environment

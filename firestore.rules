@@ -18,8 +18,8 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         (request.auth.token.email != null && (
-          request.auth.token.email.matches('(?i)^pauloeliasc@gmail\\.com$') || 
-          request.auth.token.email.matches('(?i)^judokadojoosasco@gmail\\.com$')
+          request.auth.token.email.lower() == 'pauloeliasc@gmail.com' || 
+          request.auth.token.email.lower() == 'judokadojoosasco@gmail.com'
         )) ||
         (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('role', '') == 'admin')
@@ -29,8 +29,8 @@ service cloud.firestore {
     function isProfessor() {
       return isSignedIn() && (
         (request.auth.token.email != null && (
-          request.auth.token.email.matches('(?i)^pauloeliasc@gmail\\.com$') || 
-          request.auth.token.email.matches('(?i)^judokadojoosasco@gmail\\.com$')
+          request.auth.token.email.lower() == 'pauloeliasc@gmail.com' || 
+          request.auth.token.email.lower() == 'judokadojoosasco@gmail.com'
          )) ||
         (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) && 
          (get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('role', '') == 'professor' || 
@@ -133,6 +133,11 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if isAdmin() && isValidUser(incoming());
       allow update: if (isAdmin() || isOwner(userId)) && isValidUser(incoming());
+    }
+
+    match /auth_resets/{email} {
+      allow get: if true;
+      allow write: if isProfessor();
     }
 
     match /profiles/{profileId} {

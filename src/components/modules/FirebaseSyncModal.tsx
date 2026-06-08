@@ -29,6 +29,7 @@ export default function FirebaseSyncModal({ profiles, onClose }: FirebaseSyncMod
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [error, setError] = useState<string>('');
+  const [failedPasswordResetEmail, setFailedPasswordResetEmail] = useState<string | null>(null);
   
   // Local list of profiles that we can interact with and update dynamically
   const [localProfiles, setLocalProfiles] = useState<Profile[]>(profiles);
@@ -130,6 +131,7 @@ export default function FirebaseSyncModal({ profiles, onClose }: FirebaseSyncMod
     setLoading(true);
     setStatusMessage(`Criando credenciais de acesso para ${email}...`);
     setError('');
+    setFailedPasswordResetEmail(null);
     try {
       await createStudentAccount(email, profileId);
       setStatusMessage('Sucesso! Conta criada com senha padrão: 123456');
@@ -139,7 +141,11 @@ export default function FirebaseSyncModal({ profiles, onClose }: FirebaseSyncMod
       );
     } catch (err: any) {
       console.error(err);
-      setError(`Erro ao criar conta Auth para ${email}: ${err.message}`);
+      const errMsg = err.message || 'Erro desconhecido';
+      setError(`Erro ao criar conta Auth para ${email}: ${errMsg}`);
+      if (errMsg.includes('já possui uma conta') || errMsg.includes('123456')) {
+        setFailedPasswordResetEmail(email);
+      }
     } finally {
       setLoading(false);
     }
@@ -149,6 +155,7 @@ export default function FirebaseSyncModal({ profiles, onClose }: FirebaseSyncMod
     setLoading(true);
     setStatusMessage(`Vinculando perfis do e-mail ${email} em uma única conta de família...`);
     setError('');
+    setFailedPasswordResetEmail(null);
 
     try {
       // Find one items with a valid userId (if any)
@@ -183,7 +190,11 @@ export default function FirebaseSyncModal({ profiles, onClose }: FirebaseSyncMod
 
     } catch (err: any) {
       console.error(err);
-      setError(`Erro ao vincular conta de família: ${err.message || 'Erro desconhecido'}`);
+      const errMsg = err.message || 'Erro desconhecido';
+      setError(`Erro ao vincular conta de família: ${errMsg}`);
+      if (errMsg.includes('já possui uma conta') || errMsg.includes('123456')) {
+        setFailedPasswordResetEmail(email);
+      }
     } finally {
       setLoading(false);
     }
@@ -263,10 +274,55 @@ export default function FirebaseSyncModal({ profiles, onClose }: FirebaseSyncMod
             <motion.div 
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl flex items-center gap-3 text-sm font-semibold animate-shake"
+              className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl flex flex-col gap-3 text-sm font-semibold animate-shake"
             >
-              <ShieldAlert className="w-5 h-5 text-rose-500 shrink-0" />
-              <span>{error}</span>
+              <div className="flex items-center gap-3">
+                <ShieldAlert className="w-5 h-5 text-rose-500 shrink-0" />
+                <span>{error}</span>
+              </div>
+              {failedPasswordResetEmail && (
+                <div className="mt-1 p-4 bg-white border border-rose-100 rounded-xl space-y-3 shadow-sm select-none">
+                  <p className="text-xs text-slate-600 leading-relaxed font-semibold font-sans">
+                    💡 Quer que o sistema redefina essa conta antiga do aluno para usar a senha padrão <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600 font-mono">"123456"</code> e depois tente vinculá-la automaticamente?
+                  </p>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const email = failedPasswordResetEmail;
+                      setLoading(true);
+                      setStatusMessage(`Redefinindo senha de ${email} no Firebase e tentando vincular novamente...`);
+                      setError('');
+                      try {
+                        const { resetStudentPassword } = await import('../../services/adminService');
+                        await resetStudentPassword(email);
+                        setStatusMessage(`Senha de ${email} redefinida! Reativando operação para vincular o perfil...`);
+                        
+                        // Retry original action
+                        const dupItem = duplicates.find(d => d.email.trim().toLowerCase() === email.trim().toLowerCase());
+                        if (dupItem) {
+                          await handleLinkAllFamily(email, dupItem.items);
+                        } else {
+                          const unlinkedItem = unlinked.find(u => u.email?.trim().toLowerCase() === email.trim().toLowerCase());
+                          if (unlinkedItem) {
+                            await handleCreateAuth(unlinkedItem.id, email);
+                          } else {
+                            setStatusMessage(`Senha de ${email} redefinida com sucesso para o padrão "123456"!`);
+                            setFailedPasswordResetEmail(null);
+                          }
+                        }
+                      } catch (err: any) {
+                        setError(`Falha ao redefinir e vincular automaticamente: ${err.message || err}`);
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[10px] uppercase tracking-widest px-4 py-2.5 rounded-xl transition-all shadow-md active:scale-95 flex items-center gap-1.5 cursor-pointer max-w-max"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin-slow" />
+                    <span>Redefinir para "123456" & Vincular</span>
+                  </button>
+                </div>
+              )}
             </motion.div>
           )}
 
