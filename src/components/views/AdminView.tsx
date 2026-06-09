@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { db, doc } from '../../lib/firebase';
-import { collection, query, onSnapshot, getDocs, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { Profile, UserRole, ClassSession, Payment, Settings, Schedule } from '../../types';
+import { collection, query, onSnapshot, getDocs, setDoc, updateDoc, deleteDoc, collectionGroup, orderBy } from 'firebase/firestore';
+import { Profile, UserRole, ClassSession, Payment, Settings, Schedule, Presence } from '../../types';
 import { Users, Calendar, Wallet, Plus, Trash2, CheckCircle, Clock, GraduationCap, Activity } from 'lucide-react';
 import { cn, formatDate } from '../../lib/utils';
 import MemberManagement from '../modules/MemberManagement';
@@ -11,6 +11,8 @@ import SettingsPanel from '../modules/SettingsPanel';
 import GraduationView from './GraduationView';
 import StudentAchievements from './StudentAchievements';
 import TodayClasses from '../modules/TodayClasses';
+import AnalyticsDashboard from '../modules/AnalyticsDashboard';
+import PresenceReport from '../modules/PresenceReport';
 import { useAuth } from '../../AuthContext';
 
 export default function AdminView({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (t: string) => void }) {
@@ -21,6 +23,7 @@ export default function AdminView({ activeTab, setActiveTab }: { activeTab: stri
   const [settings, setSettings] = useState<Settings | null>(null);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [allPresences, setAllPresences] = useState<Presence[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -61,6 +64,13 @@ export default function AdminView({ activeTab, setActiveTab }: { activeTab: stri
       setSchedules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Schedule)));
     });
 
+    const unsubPresences = onSnapshot(
+      query(collectionGroup(db, 'presences'), orderBy('timestamp', 'desc')),
+      (snapshot) => {
+        setAllPresences(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Presence)));
+      }
+    );
+
     return () => {
       unsubProfile();
       unsubProfiles();
@@ -68,21 +78,23 @@ export default function AdminView({ activeTab, setActiveTab }: { activeTab: stri
       unsubSettings();
       unsubPayments();
       unsubSchedules();
+      unsubPresences();
     };
   }, [user]);
 
-  if (activeTab === 'home') return <AdminHome profiles={profiles} classes={classes} payments={payments} schedules={schedules} profile={profile} />;
+  if (activeTab === 'home') return <AdminHome profiles={profiles} classes={classes} payments={payments} schedules={schedules} profile={profile} settings={settings} />;
   if (activeTab === 'members') return <MemberManagement profiles={profiles} payments={payments} />;
   if (activeTab === 'finance') return <FinanceManagement profiles={profiles} payments={payments} settings={settings} />;
   if (activeTab === 'classes') return <ClassManagement classes={classes} profiles={profiles} />;
   if (activeTab === 'graduation') return <GraduationView />;
   if (activeTab === 'ranking') return <StudentAchievements />;
+  if (activeTab === 'reports') return <PresenceReport presences={allPresences} profiles={profiles} classes={classes} payments={payments} settings={settings} />;
   if (activeTab === 'settings') return <SettingsPanel settings={settings} />;
 
   return <div>Em breve: {activeTab}</div>;
 }
 
-function AdminHome({ profiles, classes, payments, schedules, profile }: { profiles: Profile[], classes: ClassSession[], payments: Payment[], schedules: Schedule[], profile: Profile | null }) {
+function AdminHome({ profiles, classes, payments, schedules, profile, settings }: { profiles: Profile[], classes: ClassSession[], payments: Payment[], schedules: Schedule[], profile: Profile | null, settings: Settings | null }) {
   const pendingPayments = payments.filter(p => p.status === 'pending').length;
   
   const activeProfiles = profiles.filter(p => !p.status || p.status === 'active');
@@ -117,34 +129,17 @@ function AdminHome({ profiles, classes, payments, schedules, profile }: { profil
 
       <TodayClasses profile={profile} classes={classes} schedules={schedules} />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 flex flex-col justify-between shadow-sm hover:shadow-md transition-all group gap-4">
-          <div className="flex items-center gap-5">
-            <div className="w-14 h-14 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 text-indigo-600 bg-indigo-50">
-              <Users className="w-7 h-7" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-400">Membros Ativos</p>
-              <p className="text-2xl font-bold text-slate-800 tracking-tight">{activeProfiles.length}</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 text-[10px]">
-            <div className="flex justify-between items-center px-1">
-              <span className="text-slate-400 font-semibold font-sans">Alunos</span>
-              <span className="font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{totalStudents}</span>
-            </div>
-            <div className="flex justify-between items-center px-1">
-              <span className="text-slate-400 font-semibold font-sans">Profs</span>
-              <span className="font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{totalProfessors}</span>
-            </div>
-            <div className="flex justify-between items-center px-1">
-              <span className="text-slate-400 font-semibold font-sans">Admins</span>
-              <span className="font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{totalAdmins}</span>
-            </div>
-          </div>
+      <div className="space-y-6">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
+          <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">Indicadores & Analytics</h3>
         </div>
-        <StatCard icon={Wallet} label="Cobranças em Aberto" value={pendingPayments} color="text-amber-600 bg-amber-50" />
-        <StatCard icon={Calendar} label="Aulas na Semana" value={classes.length} color="text-emerald-600 bg-emerald-50" />
+        <AnalyticsDashboard 
+          initialProfiles={profiles}
+          initialClasses={classes}
+          initialPayments={payments}
+          initialSettings={settings}
+        />
       </div>
 
       <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm">

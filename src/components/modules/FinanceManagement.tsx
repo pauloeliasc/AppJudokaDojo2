@@ -9,18 +9,30 @@ export default function FinanceManagement({ profiles, payments, settings }: { pr
 
   const students = profiles.filter(p => !p.role || p.role === 'student');
 
-  const confirmPayment = async (studentId: string, month: number, year: number) => {
+  const currentMonthNum = new Date().getMonth() + 1;
+  const currentYearNum = new Date().getFullYear();
+
+  const [selectedMonth, setSelectedMonth] = useState<number>(currentMonthNum);
+  const [selectedYear, setSelectedYear] = useState<number>(currentYearNum);
+
+  const months = Array.from({ length: 12 }, (_, i) => i + 1);
+  const years = [currentYearNum - 1, currentYearNum, currentYearNum + 1];
+
+  const handleTogglePaymentStatus = async (studentId: string, currentStatus: 'paid' | 'pending') => {
     setLoading(true);
     try {
-      const existingPayment = payments.find(p => p.memberId === studentId && p.month === month && p.year === year);
-      const paymentId = existingPayment?.id || `${studentId}_${year}_${month}`;
-      await paymentsApi.updateStatus(paymentId, 'paid', new Date().toISOString(), studentId, month, year);
+      const existingPayment = payments.find(p => p.memberId === studentId && p.month === selectedMonth && p.year === selectedYear);
+      const paymentId = existingPayment?.id || `${studentId}_${selectedYear}_${selectedMonth}`;
+      const newStatus = currentStatus === 'paid' ? 'pending' : 'paid';
+      
+      await paymentsApi.updateStatus(paymentId, newStatus, new Date().toISOString(), studentId, selectedMonth, selectedYear);
 
-      // Add points for being on time
+      // Give 50 points or adjust points
       const profile = profiles.find(p => p.id === studentId);
       if (profile) {
+        const pointDiff = newStatus === 'paid' ? 50 : -50;
         await profilesApi.update(studentId, {
-          points: (profile.points || 0) + 50 // 50 points for timely payment
+          points: Math.max(0, (profile.points || 0) + pointDiff)
         });
       }
     } catch (e) {
@@ -30,15 +42,34 @@ export default function FinanceManagement({ profiles, payments, settings }: { pr
     }
   };
 
-  const currentMonth = new Date().getMonth() + 1;
-  const currentYear = new Date().getFullYear();
-
   return (
     <div className="space-y-8">
-      <header className="flex justify-between items-center">
-        <h2 className="text-3xl font-black uppercase tracking-tight">Controle Financeiro</h2>
-        <div className="bg-white px-4 py-2 rounded-xl border border-[#0a0a0a]/5 font-bold text-sm">
-          Ref: {getMonthName(currentMonth)} / {currentYear}
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-3xl font-black uppercase tracking-tight">Controle Financeiro</h2>
+          <p className="text-xs text-slate-400 font-medium mt-1">Gerencie a adimplência e confirme pagamentos via PIX ou dinheiro manualmente.</p>
+        </div>
+        
+        <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-[#0a0a0a]/5 shadow-sm">
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(Number(e.target.value))}
+            className="bg-transparent border-none text-xs font-bold text-slate-700 outline-none px-3 py-1.5 cursor-pointer"
+          >
+            {months.map(m => (
+              <option key={m} value={m}>{getMonthName(m)}</option>
+            ))}
+          </select>
+          <div className="w-px h-5 bg-slate-100" />
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(Number(e.target.value))}
+            className="bg-transparent border-none text-xs font-bold text-slate-700 outline-none px-3 py-1.5 cursor-pointer"
+          >
+            {years.map(y => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
         </div>
       </header>
 
@@ -49,18 +80,21 @@ export default function FinanceManagement({ profiles, payments, settings }: { pr
               <thead>
                 <tr className="bg-[#f5f5f4]/50 border-b border-[#0a0a0a]/5">
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest opacity-40">Judoka</th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest opacity-40">Status ({getMonthName(currentMonth)})</th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest opacity-40">Status ({getMonthName(selectedMonth)})</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest opacity-40 text-right">Ação</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#0a0a0a]/5">
                 {students.map(student => {
-                  const payment = payments.find(p => p.memberId === student.id && p.month === currentMonth && p.year === currentYear);
+                  const payment = payments.find(p => p.memberId === student.id && p.month === selectedMonth && p.year === selectedYear);
                   const isPaid = payment?.status === 'paid';
 
                   return (
                     <tr key={student.id} className="hover:bg-[#f5f5f4]/30 transition-colors">
-                      <td className="px-6 py-4 font-bold">{student.fullName}</td>
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-slate-900">{student.fullName}</div>
+                        <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">{student.currentGrade || 'Sem Faixa'}</div>
+                      </td>
                       <td className="px-6 py-4">
                         {isPaid ? (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-700 rounded-full text-xs font-bold">
@@ -73,15 +107,18 @@ export default function FinanceManagement({ profiles, payments, settings }: { pr
                         )}
                       </td>
                       <td className="px-6 py-4 text-right">
-                        {!isPaid && (
-                          <button 
-                            disabled={loading}
-                            onClick={() => confirmPayment(student.id, currentMonth, currentYear)}
-                            className="bg-[#0a0a0a] text-white text-xs font-bold px-4 py-2 rounded-lg hover:scale-105 transition-all shadow-md active:scale-95 disabled:opacity-50"
-                          >
-                            Confirmar PIX
-                          </button>
-                        )}
+                        <button 
+                          disabled={loading}
+                          onClick={() => handleTogglePaymentStatus(student.id, isPaid ? 'paid' : 'pending')}
+                          className={cn(
+                            "text-xs font-semibold px-4 py-2 rounded-lg hover:scale-105 transition-all shadow-md active:scale-95 disabled:opacity-50",
+                            isPaid 
+                              ? "bg-slate-100 text-slate-600 hover:bg-slate-200" 
+                              : "bg-[#0a0a0a] text-white hover:bg-slate-800"
+                          )}
+                        >
+                          {isPaid ? 'Reverter para Pendente' : 'Confirmar PIX/Pagto'}
+                        </button>
                       </td>
                     </tr>
                   );

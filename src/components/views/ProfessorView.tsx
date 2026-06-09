@@ -10,6 +10,7 @@ import GraduationView from './GraduationView';
 import StudentAchievements from './StudentAchievements';
 import PresenceReport from '../modules/PresenceReport';
 import TodayClasses from '../modules/TodayClasses';
+import AnalyticsDashboard from '../modules/AnalyticsDashboard';
 import { useAuth } from '../../AuthContext';
 import { Schedule } from '../../types';
 
@@ -67,17 +68,17 @@ export default function ProfessorView({ activeTab, setActiveTab }: { activeTab: 
     };
   }, [user]);
 
-  if (activeTab === 'home') return <ProfessorHome profiles={profiles} classes={classes} schedules={schedules} profile={profile} />;
+  if (activeTab === 'home') return <ProfessorHome profiles={profiles} classes={classes} schedules={schedules} profile={profile} payments={payments} />;
   if (activeTab === 'members') return <MemberManagement profiles={profiles} payments={payments} />;
   if (activeTab === 'classes') return <ClassManagement classes={classes} profiles={profiles} />;
   if (activeTab === 'graduation') return <GraduationView />;
   if (activeTab === 'ranking') return <StudentAchievements />;
-  if (activeTab === 'reports') return <PresenceReport presences={allPresences} profiles={profiles} classes={classes} />;
+  if (activeTab === 'reports') return <PresenceReport presences={allPresences} profiles={profiles} classes={classes} payments={payments} />;
 
   return <div>Em breve: {activeTab}</div>;
 }
 
-function ProfessorHome({ profiles, classes, schedules, profile }: { profiles: Profile[], classes: ClassSession[], schedules: Schedule[], profile: Profile | null }) {
+function ProfessorHome({ profiles, classes, schedules, profile, payments }: { profiles: Profile[], classes: ClassSession[], schedules: Schedule[], profile: Profile | null, payments: Payment[] }) {
   const totalStudents = profiles.filter(p => !p.role || p.role === UserRole.STUDENT).length;
 
   return (
@@ -107,25 +108,16 @@ function ProfessorHome({ profiles, classes, schedules, profile }: { profiles: Pr
 
       <TodayClasses profile={profile} classes={classes} schedules={schedules} />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-6 group hover:shadow-md transition-all">
-          <div className="w-16 h-16 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 transition-transform group-hover:scale-110">
-            <Users className="w-8 h-8" />
-          </div>
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Meus Alunos</p>
-            <p className="text-4xl font-bold text-slate-900">{totalStudents}</p>
-          </div>
+      <div className="space-y-6">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
+          <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">Indicadores & Analytics</h3>
         </div>
-        <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-6 group hover:shadow-md transition-all">
-          <div className="w-16 h-16 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 transition-transform group-hover:scale-110">
-            <Calendar className="w-8 h-8" />
-          </div>
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Aulas Marcadas</p>
-            <p className="text-4xl font-bold text-slate-900">{classes.length}</p>
-          </div>
-        </div>
+        <AnalyticsDashboard 
+          initialProfiles={profiles}
+          initialClasses={classes}
+          initialPayments={payments}
+        />
       </div>
 
       <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm">
