@@ -51,7 +51,7 @@ export default function StudentView({ activeTab, setActiveTab, forcedProfile }: 
     });
 
     const unsubAllProfiles = onSnapshot(collection(db, 'profiles'), (snapshot) => {
-      setAllProfiles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Profile)));
+      setAllProfiles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Profile)).filter(p => !p.isPointer));
     });
 
     // Fetch user presences
@@ -245,7 +245,7 @@ function StudentHome({ profile, classes, payments, schedules, presences, allProf
 
         {birthdayPeople.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {birthdayPeople.map((bMember) => {
+            {birthdayPeople.map((bMember, idx) => {
               let birthdayDateStr = '';
               try {
                 const parts = bMember.birthDate.split('-');
@@ -255,7 +255,7 @@ function StudentHome({ profile, classes, payments, schedules, presences, allProf
               } catch (e) {}
 
               return (
-                <div key={bMember.id} className="flex items-center gap-4 p-4 bg-violet-50/40 border border-violet-100 rounded-2xl group hover:border-violet-200 transition-all">
+                <div key={`${bMember.id}-${idx}`} className="flex items-center gap-4 p-4 bg-violet-50/40 border border-violet-100 rounded-2xl group hover:border-violet-200 transition-all">
                   <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold overflow-hidden border-2 border-white shadow-sm shrink-0">
                     {bMember.photoUrl ? (
                       <img src={bMember.photoUrl} alt={bMember.fullName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -650,10 +650,14 @@ function StudentPayments({ profile, payments, settings }: { profile: Profile | n
 
         <div className="space-y-4">
           <h3 className="font-bold text-lg px-2">Histórico de Pagamentos</h3>
-          {payments.sort((a,b) => (b.year*100 + b.month) - (a.year*100 + a.month)).map(p => (
-            <div key={p.id} className="bg-white p-4 rounded-2xl border border-[#0a0a0a]/5 flex justify-between items-center">
+          {payments.sort((a,b) => (b.year*100 + b.month) - (a.year*100 + a.month)).map((p, idx) => (
+            <div key={`${p.id}-${idx}`} className="bg-white p-4 rounded-2xl border border-[#0a0a0a]/5 flex justify-between items-center">
               <span className="font-bold">{getMonthName(p.month)} / {p.year}</span>
-              <span className="text-xs font-bold uppercase text-green-600 bg-green-50 px-2 py-1 rounded">Pago</span>
+              {p.status === 'paid' ? (
+                <span className="text-xs font-bold uppercase text-green-600 bg-green-50 px-2 py-1 rounded">Pago</span>
+              ) : (
+                <span className="text-xs font-bold uppercase text-amber-600 bg-amber-50 px-2 py-1 rounded">Pendente</span>
+              )}
             </div>
           ))}
           {payments.length === 0 && <p className="text-sm text-[#0a0a0a]/40 italic px-2">Nenhum registro anterior.</p>}

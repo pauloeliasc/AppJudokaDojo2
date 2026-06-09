@@ -263,59 +263,64 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
                   <div className="mt-2 flex items-center gap-1.5">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     <span className="text-[10px] font-bold text-slate-500 tracking-tight">
-                      {presenceCounts[classSession.id] || 0} {(presenceCounts[classSession.id] || 0) === 1 ? 'aluno presente' : 'alunos presentes'}
+                      {isAdminOrProfessor 
+                        ? `${presenceCounts[classSession.id] || 0} ${(presenceCounts[classSession.id] || 0) === 1 ? 'aluno presente' : 'alunos presentes'}`
+                        : hasCheckedIn ? 'Você está presente' : 'Você não realizou check-in'
+                      }
                     </span>
                   </div>
                 )}
 
-                {classSession && classPresences.length > 0 && (
+                {classSession && (isAdminOrProfessor ? classPresences.length > 0 : hasCheckedIn) && (
                   <div className="mt-4 pt-3 border-t border-slate-200/50">
                     <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-                      <span>No treino agora ({classPresences.length})</span>
+                      <span>{isAdminOrProfessor ? `No treino agora (${classPresences.length})` : 'Seu check-in'}</span>
                     </div>
                     <div className="flex flex-wrap gap-1.5 max-h-[72px] overflow-y-auto pr-1">
-                      {classPresences.map((p, pIdx) => {
-                        const studentProfile = allProfiles.find(prof => prof.id === p.memberId);
-                        const isMe = profile && p.memberId === profile.id;
-                        const isPrivate = studentProfile?.isPrivateProfile;
+                      {classPresences
+                        .filter(p => isAdminOrProfessor || (profile && p.memberId === profile.id))
+                        .map((p, pIdx) => {
+                          const studentProfile = allProfiles.find(prof => prof.id === p.memberId);
+                          const isMe = profile && p.memberId === profile.id;
+                          const isPrivate = studentProfile?.isPrivateProfile;
 
-                        const displayName = isMe
-                          ? (isPrivate ? "Você (Privado)" : "Você")
-                          : (isPrivate ? "Colega Oculto" : (studentProfile?.fullName?.split(' ')[0] || 'Aluno'));
+                          const displayName = isMe
+                            ? (isPrivate ? "Você (Privado)" : "Você")
+                            : (isPrivate ? "Colega Oculto" : (studentProfile?.fullName?.split(' ')[0] || 'Aluno'));
 
-                        const showPhoto = !isPrivate || isMe;
+                          const showPhoto = !isPrivate || isMe;
 
-                        return (
-                          <div
-                            key={`${p.id || pIdx}-${pIdx}`}
-                            className={cn(
-                              "flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold select-none border transition-all",
-                              isMe 
-                                ? "bg-emerald-100/85 border-emerald-200/70 text-emerald-800" 
-                                : isPrivate 
-                                  ? "bg-slate-100 border-slate-200 text-slate-400" 
-                                  : "bg-white border-slate-100 hover:border-slate-300 text-slate-600"
-                            )}
-                            title={isPrivate ? "Este colega optou por ocultar a presença" : (studentProfile?.fullName || 'Aluno')}
-                          >
-                            <div className="w-4 h-4 rounded-full flex items-center justify-center font-black text-[8px] overflow-hidden border border-slate-200 bg-slate-50 flex-shrink-0">
-                              {showPhoto && studentProfile?.photoUrl ? (
-                                <img
-                                  src={studentProfile.photoUrl}
-                                  alt={displayName}
-                                  className="w-full h-full object-cover"
-                                  referrerPolicy="no-referrer"
-                                />
-                              ) : isPrivate ? (
-                                <Lock className="w-2 h-2 text-slate-400" />
-                              ) : (
-                                displayName.slice(0, 1).toUpperCase()
+                          return (
+                            <div
+                              key={`${p.id || pIdx}-${pIdx}`}
+                              className={cn(
+                                "flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold select-none border transition-all",
+                                isMe 
+                                  ? "bg-emerald-100/85 border-emerald-200/70 text-emerald-800" 
+                                  : isPrivate 
+                                    ? "bg-slate-100 border-slate-200 text-slate-400" 
+                                    : "bg-white border-slate-100 hover:border-slate-300 text-slate-600"
                               )}
+                              title={isPrivate ? "Este colega optou por ocultar a presença" : (studentProfile?.fullName || 'Aluno')}
+                            >
+                              <div className="w-4 h-4 rounded-full flex items-center justify-center font-black text-[8px] overflow-hidden border border-slate-200 bg-slate-50 flex-shrink-0">
+                                {showPhoto && studentProfile?.photoUrl ? (
+                                  <img
+                                    src={studentProfile.photoUrl}
+                                    alt={displayName}
+                                    className="w-full h-full object-cover"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                ) : isPrivate ? (
+                                  <Lock className="w-2 h-2 text-slate-400" />
+                                ) : (
+                                  displayName.slice(0, 1).toUpperCase()
+                                )}
+                              </div>
+                              <span className="truncate max-w-[70px]">{displayName}</span>
                             </div>
-                            <span className="truncate max-w-[70px]">{displayName}</span>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
                     </div>
                   </div>
                 )}
@@ -347,7 +352,7 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
                     "mt-6 w-full py-3 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all",
                     hasCheckedIn 
                       ? "bg-rose-500 text-white shadow-lg shadow-rose-500/20 hover:bg-rose-600" 
-                      : "bg-[#0a0a0a] text-white hover:scale-[1.02] shadow-lg"
+                      : "bg-[#0a0a0a] text-[#ffffff] hover:scale-[1.02] shadow-lg"
                   )}
                 >
                   {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : hasCheckedIn ? <AlertCircle className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
@@ -359,147 +364,149 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
         })}
       </div>
 
-      <div className="mt-12 border-t border-slate-100 pt-10">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-              <Users className="w-5 h-5 animate-pulse" />
+      {isAdminOrProfessor && (
+        <div className="mt-12 border-t border-slate-100 pt-10">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                <Users className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg text-slate-900 leading-tight flex items-center gap-2">
+                  Presenças em Tempo Real
+                  <span className="flex h-2 w-2 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                </h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Veja quem treinou ou está treinando hoje ou em outra data</p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-bold text-lg text-slate-900 leading-tight flex items-center gap-2">
-                Presenças em Tempo Real
-                <span className="flex h-2 w-2 relative">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-              </h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Veja quem treinou ou está treinando hoje ou em outra data</p>
+
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-3">
+              {/* Date filter select */}
+              <div className="flex flex-col min-w-[120px]">
+                <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider mb-1 ml-0.5">Filtrar por Data</label>
+                <input 
+                  type="date"
+                  value={panelDate}
+                  onChange={(e) => {
+                    setPanelDate(e.target.value);
+                    setPanelClassId(''); // Reset selected class on date swap
+                  }}
+                  className="bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none transition-all cursor-pointer"
+                />
+              </div>
+
+              {/* Class/Turma filter select */}
+              <div className="flex flex-col min-w-[170px] flex-1">
+                <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider mb-1 ml-0.5">Filtrar por Turma/Treino</label>
+                <select
+                  value={panelClassId}
+                  onChange={(e) => setPanelClassId(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none transition-all cursor-pointer"
+                >
+                  <option value="">Todos os Treinos</option>
+                  {classes
+                    .filter(c => c.date === panelDate)
+                    .map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.time} - {c.title || `Treino (${c.type})`}
+                      </option>
+                    ))
+                  }
+                </select>
+              </div>
             </div>
           </div>
 
-          <div className="flex flex-wrap sm:flex-nowrap items-center gap-3">
-            {/* Date filter select */}
-            <div className="flex flex-col min-w-[120px]">
-              <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider mb-1 ml-0.5">Filtrar por Data</label>
-              <input 
-                type="date"
-                value={panelDate}
-                onChange={(e) => {
-                  setPanelDate(e.target.value);
-                  setPanelClassId(''); // Reset selected class on date swap
-                }}
-                className="bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none transition-all cursor-pointer"
-              />
+          {/* Display filtered results */}
+          {panelPresences.length === 0 ? (
+            <div className="bg-slate-50/50 border border-dashed border-slate-200 rounded-3xl p-10 text-center">
+              <Users className="w-8 h-8 text-slate-300 mx-auto mb-2.5" />
+              <h5 className="font-extrabold text-sm text-slate-800 uppercase tracking-wide">Sem registro de presença</h5>
+              <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">Nenhum aluno realizou check-in para sessões de treino na data selecionada ({panelDate}).</p>
             </div>
+          ) : (
+            (() => {
+              const finalFiltered = panelClassId 
+                ? panelPresences.filter(p => p.classId === panelClassId)
+                : panelPresences;
 
-            {/* Class/Turma filter select */}
-            <div className="flex flex-col min-w-[170px] flex-1">
-              <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider mb-1 ml-0.5">Filtrar por Turma/Treino</label>
-              <select
-                value={panelClassId}
-                onChange={(e) => setPanelClassId(e.target.value)}
-                className="bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none transition-all cursor-pointer"
-              >
-                <option value="">Todos os Treinos</option>
-                {classes
-                  .filter(c => c.date === panelDate)
-                  .map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.time} - {c.title || `Treino (${c.type})`}
-                    </option>
-                  ))
-                }
-              </select>
-            </div>
-          </div>
-        </div>
+              if (finalFiltered.length === 0) {
+                return (
+                  <div className="bg-slate-50/50 border border-dashed border-slate-200 rounded-3xl p-10 text-center">
+                    <Users className="w-8 h-8 text-slate-300 mx-auto mb-2.5" />
+                    <h5 className="font-extrabold text-sm text-slate-800 uppercase tracking-wide">Nenhuma presença nesta turma</h5>
+                    <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">Nesta turma específica ainda não constam presenças gravadas para o dia selecionado.</p>
+                  </div>
+                );
+              }
 
-        {/* Display filtered results */}
-        {panelPresences.length === 0 ? (
-          <div className="bg-slate-50/50 border border-dashed border-slate-200 rounded-3xl p-10 text-center">
-            <Users className="w-8 h-8 text-slate-300 mx-auto mb-2.5" />
-            <h5 className="font-extrabold text-sm text-slate-800 uppercase tracking-wide">Sem registro de presença</h5>
-            <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">Nenhum aluno realizou check-in para sessões de treino na data selecionada ({panelDate}).</p>
-          </div>
-        ) : (
-          (() => {
-            const finalFiltered = panelClassId 
-              ? panelPresences.filter(p => p.classId === panelClassId)
-              : panelPresences;
-
-            if (finalFiltered.length === 0) {
               return (
-                <div className="bg-slate-50/50 border border-dashed border-slate-200 rounded-3xl p-10 text-center">
-                  <Users className="w-8 h-8 text-slate-300 mx-auto mb-2.5" />
-                  <h5 className="font-extrabold text-sm text-slate-800 uppercase tracking-wide">Nenhuma presença nesta turma</h5>
-                  <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto leading-relaxed">Nesta turma específica ainda não constam presenças gravadas para o dia selecionado.</p>
-                </div>
-              );
-            }
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in">
+                  {finalFiltered.map((p, idx) => {
+                    const studentProfile = allProfiles.find(prof => prof.id === p.memberId);
+                    const classData = classes.find(c => c.id === p.classId);
+                    const isMe = profile && p.memberId === profile.id;
+                    const isPrivate = studentProfile?.isPrivateProfile;
 
-            return (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in">
-                {finalFiltered.map((p, idx) => {
-                  const studentProfile = allProfiles.find(prof => prof.id === p.memberId);
-                  const classData = classes.find(c => c.id === p.classId);
-                  const isMe = profile && p.memberId === profile.id;
-                  const isPrivate = studentProfile?.isPrivateProfile;
+                    const displayName = isMe
+                      ? (isPrivate ? "Você (Oculto para colegas)" : "Você")
+                      : (isPrivate ? "Colega Oculto" : (studentProfile?.fullName || 'Visitante'));
 
-                  const displayName = isMe
-                    ? (isPrivate ? "Você (Oculto para colegas)" : "Você")
-                    : (isPrivate ? "Colega Oculto" : (studentProfile?.fullName || 'Visitante'));
+                    const showPhoto = !isPrivate || isMe;
+                    const checkInTime = p.timestamp ? new Date(p.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
 
-                  const showPhoto = !isPrivate || isMe;
-                  const checkInTime = p.timestamp ? new Date(p.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
-
-                  return (
-                    <div 
-                      key={`${p.id}-${p.classId || idx}-${idx}`} 
-                      className={cn(
-                        "flex items-center gap-4 p-4 border rounded-2xl group hover:shadow-md transition-all",
-                        isMe 
-                          ? "bg-emerald-50/50 border-emerald-100 hover:border-emerald-200" 
-                          : "bg-white border-slate-100 hover:border-slate-200"
-                      )}
-                    >
-                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 font-extrabold overflow-hidden border border-slate-150 shadow-sm shrink-0">
-                        {showPhoto && studentProfile?.photoUrl ? (
-                          <img 
-                            src={studentProfile.photoUrl} 
-                            alt={displayName} 
-                            className="w-full h-full object-cover" 
-                            referrerPolicy="no-referrer" 
-                          />
-                        ) : isPrivate ? (
-                          <Lock className="w-4 h-4 text-slate-400" />
-                        ) : (
-                          displayName.charAt(0).toUpperCase()
+                    return (
+                      <div 
+                        key={`${p.id}-${p.classId || idx}-${idx}`} 
+                        className={cn(
+                          "flex items-center gap-4 p-4 border rounded-2xl group hover:shadow-md transition-all",
+                          isMe 
+                            ? "bg-emerald-50/50 border-emerald-100 hover:border-emerald-200" 
+                            : "bg-white border-slate-100 hover:border-slate-200"
                         )}
-                      </div>
-                      <div className="flex flex-col min-w-0">
-                        <span className={cn(
-                          "font-bold text-slate-800 text-sm truncate",
-                          isPrivate && !isMe && "text-slate-400 italic"
-                        )}>
-                          {displayName}
-                        </span>
-                        <div className="flex flex-col mt-0.5">
-                          <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-tight truncate leading-none">
-                            {classData?.title || 'Aula/' + (classData?.type || 'Treino')}
+                      >
+                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 font-extrabold overflow-hidden border border-slate-150 shadow-sm shrink-0">
+                          {showPhoto && studentProfile?.photoUrl ? (
+                            <img 
+                              src={studentProfile.photoUrl} 
+                              alt={displayName} 
+                              className="w-full h-full object-cover" 
+                              referrerPolicy="no-referrer" 
+                            />
+                          ) : isPrivate ? (
+                            <Lock className="w-4 h-4 text-slate-400" />
+                          ) : (
+                            displayName.charAt(0).toUpperCase()
+                          )}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className={cn(
+                            "font-bold text-slate-800 text-sm truncate",
+                            isPrivate && !isMe && "text-slate-400 italic"
+                          )}>
+                            {displayName}
                           </span>
-                          <span className="text-[8px] text-slate-400 font-medium mt-0.5">
-                            Check-in às {checkInTime || classData?.time || '--:--'}
-                          </span>
+                          <div className="flex flex-col mt-0.5">
+                            <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-tight truncate leading-none">
+                              {classData?.title || 'Aula/' + (classData?.type || 'Treino')}
+                            </span>
+                            <span className="text-[8px] text-slate-400 font-medium mt-0.5">
+                              Check-in às {checkInTime || classData?.time || '--:--'}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()
-        )}
-      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()
+          )}
+        </div>
+      )}
     </div>
   );
 }

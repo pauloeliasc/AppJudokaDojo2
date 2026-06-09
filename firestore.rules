@@ -45,11 +45,22 @@ service cloud.firestore {
     function isMyProfile(profileId) {
       return isSignedIn() && (
         profileId == request.auth.uid || 
-        (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('id', '') == profileId) ||
+        (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) && (
+          get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('id', '') == profileId ||
+          (exists(/databases/$(database)/documents/profiles/$(profileId)) && (
+            get(/databases/$(database)/documents/profiles/$(profileId)).data.get('responsibleId', '') == request.auth.uid ||
+            get(/databases/$(database)/documents/profiles/$(profileId)).data.get('responsibleId', '') == get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('id', '')
+          ))
+        )) ||
         (exists(/databases/$(database)/documents/profiles/$(profileId)) && (
           get(/databases/$(database)/documents/profiles/$(profileId)).data.get('userId', '') == request.auth.uid ||
-          (request.auth.token.email != null && get(/databases/$(database)/documents/profiles/$(profileId)).data.get('email', '') == request.auth.token.email)
+          get(/databases/$(database)/documents/profiles/$(profileId)).data.get('responsibleId', '') == request.auth.uid ||
+          (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) && 
+           get(/databases/$(database)/documents/profiles/$(profileId)).data.get('responsiblePhone', '') == get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('phoneNumber', '')) ||
+          (request.auth.token.email != null && (
+            get(/databases/$(database)/documents/profiles/$(profileId)).data.get('email', '') == request.auth.token.email ||
+            get(/databases/$(database)/documents/profiles/$(profileId)).data.get('responsibleEmail', '') == request.auth.token.email
+          ))
         ))
       );
     }
@@ -96,15 +107,15 @@ service cloud.firestore {
     function isValidPayment(data) {
       return data.keys().hasAll(['memberId', 'month', 'year', 'status']) &&
              data.memberId is string &&
-             data.month is int && data.month >= 1 && data.month <= 12 &&
-             data.year is int &&
+             data.month is number && data.month >= 1 && data.month <= 12 &&
+             data.year is number &&
              data.status in ['pending', 'paid'];
     }
 
 
     function isValidSchedule(data) {
       return data.keys().hasAll(['dayOfWeek', 'time', 'type', 'professorId']) &&
-             data.dayOfWeek is int && data.dayOfWeek >= 0 && data.dayOfWeek <= 6 &&
+             data.dayOfWeek is number && data.dayOfWeek >= 0 && data.dayOfWeek <= 6 &&
              data.time is string &&
              data.professorId is string;
     }

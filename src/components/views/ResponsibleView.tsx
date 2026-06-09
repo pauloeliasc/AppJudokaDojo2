@@ -103,9 +103,9 @@ export default function ResponsibleView({ activeTab, setActiveTab }: { activeTab
     <div className="space-y-8">
       {/* Student Selector Bar */}
       <div className="flex flex-wrap items-center gap-3">
-        {dependents.map((dependent) => (
+        {dependents.map((dependent, idx) => (
           <button
-            key={dependent.id}
+            key={`${dependent.id}-${idx}`}
             onClick={() => setSelectedStudentId(dependent.id)}
             className={cn(
               "flex items-center gap-3 px-5 py-3 rounded-2xl transition-all border-2",

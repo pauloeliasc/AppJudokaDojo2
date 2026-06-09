@@ -180,9 +180,10 @@ export const presencesApi = {
   
   getAllGlobal: async (): Promise<Presence[]> => {
     try {
-      const q = query(collectionGroup(db, 'presences'), orderBy('timestamp', 'desc'));
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Presence));
+      const querySnapshot = await getDocs(collectionGroup(db, 'presences'));
+      const list = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Presence));
+      list.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+      return list;
     } catch (e) {
       console.error("Error fetching global presences:", e);
       return [];
@@ -191,9 +192,11 @@ export const presencesApi = {
 
   getByMember: async (memberId: string): Promise<Presence[]> => {
     try {
-      const q = query(collectionGroup(db, 'presences'), where('memberId', '==', memberId), orderBy('timestamp', 'desc'));
+      const q = query(collectionGroup(db, 'presences'), where('memberId', '==', memberId));
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Presence));
+      const list = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Presence));
+      list.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+      return list;
     } catch (e) {
       console.error("Error fetching member presences:", e);
       return [];

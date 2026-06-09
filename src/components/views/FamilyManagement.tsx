@@ -579,12 +579,12 @@ export default function FamilyManagement() {
                       </div>
 
                       <div className="space-y-2.5">
-                        {familyMembers.map((member) => {
+                        {familyMembers.map((member, idx) => {
                           const isPresent = activeClassId && presencesByClass[activeClassId]?.[member.id];
                           const actionKey = `${member.id}-${schedule.id}`;
 
                           return (
-                            <div key={member.id} className="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-100 text-xs">
+                            <div key={`${member.id}-${idx}`} className="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-100 text-xs">
                               <span className="font-bold text-slate-700 truncate max-w-[120px]">{member.fullName.split(' ')[0]}</span>
                               
                               <button
@@ -629,12 +629,12 @@ export default function FamilyManagement() {
                       </div>
 
                       <div className="space-y-2.5">
-                        {familyMembers.map((member) => {
+                        {familyMembers.map((member, idx) => {
                           const isPresent = presencesByClass[sClass.id]?.[member.id];
                           const actionKey = `${member.id}-${sClass.id}`;
 
                           return (
-                            <div key={member.id} className="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-100 text-xs">
+                            <div key={`${member.id}-${idx}`} className="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-100 text-xs">
                               <span className="font-bold text-slate-700 truncate max-w-[120px]">{member.fullName.split(' ')[0]}</span>
                               
                               <button

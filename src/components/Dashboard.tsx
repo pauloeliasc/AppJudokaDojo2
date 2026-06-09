@@ -83,8 +83,8 @@ export default function Dashboard() {
                   onChange={(e) => setActiveProfileId(e.target.value)}
                   className="w-full sm:w-auto bg-white border-2 border-indigo-100 focus:border-indigo-500 rounded-xl px-3 py-1.5 text-xs font-bold text-indigo-950 outline-none transition-all shadow-sm cursor-pointer"
                 >
-                  {availableProfiles.map((p) => (
-                    <option key={p.id} value={p.id}>
+                  {availableProfiles.map((p, idx) => (
+                    <option key={`${p.id}-${idx}`} value={p.id}>
                       {p.fullName} (Faixa {p.currentGrade || 'Branca'})
                     </option>
                   ))}

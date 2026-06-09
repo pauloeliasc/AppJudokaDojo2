@@ -52,9 +52,11 @@ export default function ProfessorView({ activeTab, setActiveTab }: { activeTab: 
     });
 
     const unsubPresences = onSnapshot(
-      query(collectionGroup(db, 'presences'), orderBy('timestamp', 'desc')),
+      collectionGroup(db, 'presences'),
       (snapshot) => {
-        setAllPresences(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Presence)));
+        const list = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Presence));
+        list.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+        setAllPresences(list);
       }
     );
 
