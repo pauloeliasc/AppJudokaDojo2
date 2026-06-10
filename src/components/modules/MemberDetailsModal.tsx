@@ -39,6 +39,7 @@ interface MemberDetailsModalProps {
 export default function MemberDetailsModal({ profile, onClose }: MemberDetailsModalProps) {
   const { user: currentUser } = useAuth();
   const isAdminOrProfessor = currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.PROFESSOR;
+  const isAdmin = currentUser?.role === UserRole.ADMIN;
 
   const [presences, setPresences] = useState<Presence[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -216,7 +217,7 @@ export default function MemberDetailsModal({ profile, onClose }: MemberDetailsMo
   const months = Array.from({ length: 12 }, (_, i) => i + 1);
 
   const handleTogglePayment = async (month: number) => {
-    if (!isAdminOrProfessor) return;
+    if (!isAdmin) return;
     
     try {
       const payment = payments.find(p => p.month === month && p.year === currentYear);
@@ -374,7 +375,7 @@ export default function MemberDetailsModal({ profile, onClose }: MemberDetailsMo
                           className={cn(
                             "aspect-square rounded-2xl flex flex-col items-center justify-center gap-1 border border-dashed transition-all",
                             isPaid ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "bg-slate-50 border-slate-200 text-slate-300",
-                            isAdminOrProfessor && "cursor-pointer hover:scale-105 active:scale-95"
+                            isAdmin && "cursor-pointer hover:scale-105 active:scale-95"
                           )}
                         >
                           <span className="text-[9px] font-black uppercase tracking-tighter">{getMonthName(m).slice(0,3)}</span>

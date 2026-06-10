@@ -133,39 +133,6 @@ export default function StudentAchievements({ profileId: forcedProfileId }: { pr
         return { status: 'pending', progress: Math.min(90, count * 10), message: 'Mantenha a frequência semanal.' };
       }
     },
-    {
-      id: 'paid-3',
-      title: 'Cliente Vip (3 Meses)',
-      description: 'Mantenha sua mensalidade em dia por 3 meses consecutivos.',
-      icon: 'Coins',
-      check: () => {
-        const paidCount = memberPayments.filter(p => p.status === 'paid').length;
-        if (earnedIds.has('paid-3')) return { status: 'earned', progress: 100 };
-        return { status: 'pending', progress: Math.round((paidCount / 3) * 100), message: `${paidCount}/3 meses pagos.` };
-      }
-    },
-    {
-      id: 'paid-6',
-      title: 'Sócio Honorário (6 Meses)',
-      description: 'Mantenha sua mensalidade em dia por 6 meses consecutivos.',
-      icon: 'Calendar',
-      check: () => {
-        const paidCount = memberPayments.filter(p => p.status === 'paid').length;
-        if (earnedIds.has('paid-6')) return { status: 'earned', progress: 100 };
-        return { status: 'pending', progress: Math.round((paidCount / 6) * 100), message: `${paidCount}/6 meses pagos.` };
-      }
-    },
-    {
-      id: 'paid-12',
-      title: 'Lenda do Dojô (1 Ano)',
-      description: 'Um ano inteiro de dedicação e compromisso.',
-      icon: 'Trophy',
-      check: () => {
-        const paidCount = memberPayments.filter(p => p.status === 'paid').length;
-        if (earnedIds.has('paid-12')) return { status: 'earned', progress: 100 };
-        return { status: 'pending', progress: Math.round((paidCount / 12) * 100), message: `${paidCount}/12 meses pagos.` };
-      }
-    }
   ];
 
   return (

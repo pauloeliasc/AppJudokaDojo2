@@ -21,7 +21,6 @@ export default function Sidebar({ role, activeTab, setActiveTab, logout, userNam
     { id: 'classes', icon: Calendar, label: 'Agenda', roles: [UserRole.ADMIN, UserRole.PROFESSOR] },
     { id: 'reports', icon: FileText, label: 'Relatórios', roles: [UserRole.ADMIN, UserRole.PROFESSOR] },
     { id: 'profile', icon: UserCircle, label: 'Dados Pessoais', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT] },
-    { id: 'payments', icon: Wallet, label: 'Pagamentos', roles: [UserRole.STUDENT] },
     { id: 'history', icon: Clock, label: 'Histórico', roles: [UserRole.STUDENT] },
     { id: 'graduation', icon: GraduationCap, label: 'Exame de Faixa', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT] },
     { id: 'ranking', icon: Trophy, label: 'Conquistas', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT] },

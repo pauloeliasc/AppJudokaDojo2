@@ -131,68 +131,8 @@ export const calculateBadges = (
   }
 
   // --- Finance Badges ---
-  const paidPayments = memberPayments.filter(p => p.status === 'paid').sort((a, b) => {
-    return (a.year * 12 + a.month) - (b.year * 12 + b.month);
-  });
-
-  let consecutiveMonths = 0;
-  if (paidPayments.length > 0) {
-     let currentStreak = 1;
-     for (let i = 1; i < paidPayments.length; i++) {
-        const prev = paidPayments[i-1];
-        const curr = paidPayments[i];
-        const prevVal = prev.year * 12 + prev.month;
-        const currVal = curr.year * 12 + curr.month;
-        
-        if (currVal === prevVal + 1) {
-          currentStreak++;
-        } else {
-          currentStreak = 1;
-        }
-     }
-     consecutiveMonths = currentStreak;
-  }
-
-  if (consecutiveMonths >= 3) {
-    badges.push({
-      id: 'paid-3',
-      title: 'Adimplente 3 Meses',
-      description: '3 meses consecutivos de contribuição pontual.',
-      icon: 'Coins',
-      type: 'finance',
-      dateEarned: now.toISOString()
-    });
-  }
-  if (consecutiveMonths >= 6) {
-    badges.push({
-      id: 'paid-6',
-      title: 'Adimplente 6 Meses',
-      description: 'Meio ano de compromisso com o Dojô.',
-      icon: 'Calendar',
-      type: 'finance',
-      dateEarned: now.toISOString()
-    });
-  }
-  if (consecutiveMonths >= 9) {
-    badges.push({
-      id: 'paid-9',
-      title: 'Adimplente 9 Meses',
-      description: '9 meses seguidos apoiando a nossa arte.',
-      icon: 'Star',
-      type: 'finance',
-      dateEarned: now.toISOString()
-    });
-  }
-  if (consecutiveMonths >= 12) {
-    badges.push({
-      id: 'paid-12',
-      title: 'Judoka Fiel (1 Ano)',
-      description: '1 ano completo de adimplência e dedicação total.',
-      icon: 'Trophy',
-      type: 'finance',
-      dateEarned: now.toISOString()
-    });
-  }
+  // Removed per instructions: only the administrator profile manages monthly fees now.
+  // Conquistas/Achievements related to payments/finance has been deactivated.
 
   return badges;
 };

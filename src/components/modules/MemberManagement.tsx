@@ -407,7 +407,7 @@ function MemberCard({ profile, payments, onEdit, onViewDetails, emailCounts }: {
   const isPaid = currentPayment?.status === 'paid';
 
   const handleTogglePayment = async () => {
-    if (!isAdminOrProfessor) return;
+    if (!isAdminUser) return;
     setIsTogglingPayment(true);
     try {
       if (currentPayment) {
@@ -665,7 +665,7 @@ function MemberCard({ profile, payments, onEdit, onViewDetails, emailCounts }: {
           </div>
         </div>
         <div className="flex gap-1">
-          {profile.status === 'active' && (
+          {profile.status === 'active' && isAdminUser && (
             <button 
               onClick={handleTogglePayment}
               disabled={isTogglingPayment}

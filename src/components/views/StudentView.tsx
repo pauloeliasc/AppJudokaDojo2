@@ -76,10 +76,9 @@ export default function StudentView({ activeTab, setActiveTab, forcedProfile }: 
     };
   }, [user, forcedProfile?.id]);
 
-  if (activeTab === 'home') return <StudentHome profile={profile} classes={classes} payments={payments} schedules={schedules} presences={userPresenceList} allProfiles={allProfiles} />;
+  if (activeTab === 'home') return <StudentHome profile={profile} classes={classes} payments={payments} schedules={schedules} presences={userPresenceList} allProfiles={allProfiles} settings={settings} />;
   if (activeTab === 'profile') return <StudentProfile profile={profile} />;
   if (activeTab === 'graduation') return <GraduationView />;
-  if (activeTab === 'payments') return <StudentPayments profile={profile} payments={payments} settings={settings} />;
   if (activeTab === 'ranking') return <StudentAchievements profileId={profile?.id} />;
   if (activeTab === 'history') return <FullPresenceHistory presences={userPresenceList} classes={classes} />;
   if (activeTab === 'family') return <FamilyManagement />;
@@ -87,7 +86,15 @@ export default function StudentView({ activeTab, setActiveTab, forcedProfile }: 
   return <div>Em breve: {activeTab}</div>;
 }
 
-function StudentHome({ profile, classes, payments, schedules, presences, allProfiles }: { profile: Profile | null, classes: ClassSession[], payments: Payment[], schedules: Schedule[], presences: Presence[], allProfiles: Profile[] }) {
+function StudentHome({ profile, classes, payments, schedules, presences, allProfiles, settings }: { profile: Profile | null, classes: ClassSession[], payments: Payment[], schedules: Schedule[], presences: Presence[], allProfiles: Profile[], settings: Settings | null }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopyPix = () => {
+    if (!settings?.pixKey) return;
+    navigator.clipboard.writeText(settings.pixKey);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
   const payment = payments.find(p => p.month === currentMonth && p.year === currentYear);
@@ -171,63 +178,136 @@ function StudentHome({ profile, classes, payments, schedules, presences, allProf
       {/* Check-in Section */}
       <TodayClasses profile={profile} classes={classes} schedules={schedules} />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className={cn(
-          "p-8 rounded-2xl border flex flex-col justify-between transition-all shadow-sm group hover:shadow-md",
-          isPaid ? "bg-emerald-50 border-emerald-100" : "bg-indigo-50 border-indigo-100"
-        )}>
-          <div>
-            <div className={cn("w-14 h-14 rounded-xl flex items-center justify-center mb-6 shadow-sm", isPaid ? "bg-white text-emerald-600" : "bg-white text-indigo-600")}>
-              <Wallet className="w-8 h-8" />
+      {/* Mensalidade / Finance Area */}
+      {isPaid ? (
+        <div className="bg-emerald-50/50 border border-emerald-100 p-6 sm:p-8 rounded-[2.5rem] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-emerald-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20 shrink-0">
+              <CheckCircle2 className="w-6 h-6" />
             </div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Mensalidade de {getMonthName(currentMonth)}</p>
-            <p className={cn("text-3xl font-bold mt-1", isPaid ? "text-emerald-900" : "text-indigo-900")}>
-              {isPaid ? 'Mensalidade em Dia' : 'Pagamento Pendente'}
-            </p>
+            <div>
+              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600">Mensalidade de {getMonthName(currentMonth)}</span>
+              <h3 className="text-xl font-black text-emerald-950 mt-0.5">Mensalidade em Dia</h3>
+              <p className="text-xs text-emerald-700/70 mt-1 font-medium">Suas contribuições são confirmadas e geridas exclusivamente pela administração do Dojô.</p>
+            </div>
           </div>
-          {!isPaid && (
-            <button className="mt-8 bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-indigo-500/20 transition-all">
-              Ver Chave PIX
-            </button>
-          )}
+          <div className="bg-white border border-emerald-100 px-5 py-3 rounded-2xl shadow-sm shrink-0 w-full sm:w-auto text-center sm:text-left">
+            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">Valor Consolidado</span>
+            <span className="text-lg font-black text-emerald-700">R$ {settings?.monthlyValue ? settings.monthlyValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '150,00'}</span>
+          </div>
         </div>
-
-        <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <Calendar className="w-6 h-6 text-indigo-500" />
-              <h3 className="font-bold text-slate-900">Meu Histórico</h3>
+      ) : (
+        <div className="bg-white border border-slate-200 p-6 sm:p-8 rounded-[2.5rem] shadow-sm flex flex-col gap-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shrink-0">
+                <Wallet className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-widest text-indigo-500">Mensalidade de {getMonthName(currentMonth)}</span>
+                <h3 className="text-xl font-black text-slate-900 mt-0.5">Pagamento Pendente</h3>
+                <p className="text-xs text-slate-400 mt-1">Sua mensalidade está aguardando pagamento ou liberação da administração no sistema.</p>
+              </div>
             </div>
-            <button 
-              onClick={() => {
-                const element = document.querySelector('[data-tab="history"]');
-                if (element) (element as HTMLElement).click();
-              }}
-              className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 hover:text-indigo-700"
-            >
-              Ver Tudo
-            </button>
+            <div className="flex gap-3 shrink-0 w-full md:w-auto">
+              <div className="flex-1 md:flex-initial p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">Valor</span>
+                <span className="text-sm font-extrabold text-slate-900 block">R$ {settings?.monthlyValue ? settings.monthlyValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '150,00'}</span>
+              </div>
+              <div className="flex-1 md:flex-initial p-3 bg-amber-50/50 border border-amber-200 rounded-xl">
+                <span className="text-[8px] font-black uppercase tracking-widest text-amber-600 block">Vencimento</span>
+                <span className="text-sm font-extrabold text-amber-900 block">Dia {settings?.defaultDueDate || '10'}</span>
+              </div>
+            </div>
           </div>
-          <div className="space-y-3 flex-1 overflow-y-auto max-h-[200px] scrollbar-hide">
-            {presences.length > 0 ? (
-              presences.slice(0, 10).map((p, idx) => {
-                const classData = classes.find(c => c.id === p.classId);
-                return (
-                  <div key={`${p.id}-${p.classId || idx}-${idx}`} className="p-4 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center group hover:border-indigo-200 transition-colors">
-                    <div className="flex flex-col">
-                      <span className="font-bold text-slate-700 text-sm">{classData?.title || 'Treino Geral'}</span>
-                      <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-widest">{classData?.type || 'Treino'}</span>
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400 bg-white border border-slate-200 px-2.5 py-1 rounded-lg uppercase tracking-wider group-hover:text-indigo-600">
-                      {formatDate(p.timestamp)}
-                    </span>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+            {/* QR Code description */}
+            <div className="lg:col-span-8 space-y-4">
+              <p className="text-xs text-slate-500 leading-relaxed font-semibold">
+                Para efetuar o pagamento, utilize a transferência via PIX. Escaneie o QR Code com o aplicativo de pagamentos do seu banco ou copie a chave PIX informada abaixo. Assim que recebido, o administrador marcará o recebimento na sua ficha.
+              </p>
+              
+              <div className="space-y-1.5">
+                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block pb-0.5">NÚMERO DA CHAVE PIX P/ OPERAÇÃO</span>
+                <div className="flex gap-2 w-full">
+                  <input 
+                    type="text" 
+                    readOnly 
+                    value={settings?.pixKey || 'Não configurada'} 
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-mono font-bold text-slate-700 outline-none truncate"
+                  />
+                  <button 
+                    onClick={handleCopyPix}
+                    type="button"
+                    className={cn(
+                      "px-5 rounded-xl font-bold text-xs uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm shrink-0",
+                      copied ? "bg-emerald-600 text-white" : "bg-indigo-600 text-white hover:bg-indigo-700"
+                    )}
+                  >
+                    {copied ? 'Copiado!' : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copiar Chave</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* QR Code visual */}
+            <div className="lg:col-span-4 flex flex-col items-center justify-center bg-slate-50 border border-slate-200 p-4 rounded-3xl w-full">
+              <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
+                <QRCodeSVG value={settings?.pixKey || 'JUDOKA_DOJO'} size={120} />
+              </div>
+              <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 mt-2.5">Código QR P/ Escanear</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Histórico Simplificado em Linha */}
+      <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
+              <Calendar className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-lg text-slate-900 leading-tight">Meu Histórico Recente</h3>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Seus últimos lançamentos e presenças confirmadas</p>
+            </div>
+          </div>
+          <button 
+            onClick={() => {
+              const element = document.querySelector('[data-tab="history"]');
+              if (element) (element as HTMLElement).click();
+            }}
+            className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-600 hover:text-indigo-700 bg-indigo-50/50 hover:bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100 transition-all cursor-pointer"
+          >
+            Ver Histórico Completo
+          </button>
+        </div>
+        <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
+          {presences.length > 0 ? (
+            presences.slice(0, 5).map((p, idx) => {
+              const classData = classes.find(c => c.id === p.classId);
+              return (
+                <div key={`${p.id}-${p.classId || idx}-${idx}`} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex justify-between items-center group hover:border-indigo-100 transition-colors">
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-bold text-slate-800 text-xs truncate">{classData?.title || 'Treino Geral'}</span>
+                    <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-widest mt-0.5">{classData?.type || 'Treino'}</span>
                   </div>
-                );
-              })
-            ) : (
-              <p className="text-slate-400 text-sm italic">Nenhuma presença registrada ainda.</p>
-            )}
-          </div>
+                  <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1 rounded-xl uppercase tracking-wider shrink-0">
+                    {formatDate(p.timestamp)}
+                  </span>
+                </div>
+              );
+            })
+          ) : (
+            <p className="text-slate-400 text-xs italic p-4 text-center">Nenhuma presença registrada ainda.</p>
+          )}
         </div>
       </div>
 
