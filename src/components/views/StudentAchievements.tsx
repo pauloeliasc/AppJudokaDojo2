@@ -4,7 +4,7 @@ import { collection, query, where, onSnapshot, collectionGroup } from 'firebase/
 import { Profile, Presence, Payment, Badge } from '../../types';
 import { calculateBadges, getBadgeIcon } from '../../services/badgeService';
 import { useAuth } from '../../AuthContext';
-import { Trophy, Target, Clock, Star, Activity, Loader2, ChevronRight } from 'lucide-react';
+import { Trophy, Target, Clock, Star, Activity, Loader2, ChevronRight, Award, TrendingUp } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export default function StudentAchievements({ profileId: forcedProfileId }: { profileId?: string }) {
@@ -99,6 +99,70 @@ export default function StudentAchievements({ profileId: forcedProfileId }: { pr
           status: 'pending', 
           progress, 
           message: `${memberCount} presenças. Precisa superar o 3º lugar (${thirdPlaceCount}).`
+        };
+      }
+    },
+    {
+      id: 'top-5-month',
+      title: 'Top 5 do Mês',
+      description: 'Fique entre os 5 alunos com mais presenças no mês atual.',
+      icon: 'TrendingUp',
+      check: () => {
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+        const currentMonthPresences = allPresences.filter(p => {
+          const d = new Date(p.timestamp);
+          return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        });
+        const memberCounts = currentMonthPresences.reduce((acc, p) => {
+          acc[p.memberId] = (acc[p.memberId] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        const sortedMembers = (Object.entries(memberCounts) as [string, number][]).sort((a, b) => b[1] - a[1]);
+        const memberIdx = sortedMembers.findIndex(([id]) => id === (profile as Profile).id);
+        const memberCount = memberCounts[(profile as Profile).id] || 0;
+        
+        if (memberIdx !== -1 && memberIdx < 5) return { status: 'earned', progress: 100 };
+        
+        const fifthPlaceCount = sortedMembers.length >= 5 ? sortedMembers[4][1] : 1;
+        const progress = Math.min(99, Math.round((memberCount / (fifthPlaceCount + 1)) * 100));
+        return { 
+          status: 'pending', 
+          progress, 
+          message: `${memberCount} presenças. Precisa superar o 5º lugar (${fifthPlaceCount}).`
+        };
+      }
+    },
+    {
+      id: 'top-10-month',
+      title: 'Top 10 do Mês',
+      description: 'Fique entre os 10 alunos com mais presenças no mês atual.',
+      icon: 'Award',
+      check: () => {
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+        const currentMonthPresences = allPresences.filter(p => {
+          const d = new Date(p.timestamp);
+          return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        });
+        const memberCounts = currentMonthPresences.reduce((acc, p) => {
+          acc[p.memberId] = (acc[p.memberId] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        const sortedMembers = (Object.entries(memberCounts) as [string, number][]).sort((a, b) => b[1] - a[1]);
+        const memberIdx = sortedMembers.findIndex(([id]) => id === (profile as Profile).id);
+        const memberCount = memberCounts[(profile as Profile).id] || 0;
+        
+        if (memberIdx !== -1 && memberIdx < 10) return { status: 'earned', progress: 100 };
+        
+        const tenthPlaceCount = sortedMembers.length >= 10 ? sortedMembers[9][1] : 1;
+        const progress = Math.min(99, Math.round((memberCount / (tenthPlaceCount + 1)) * 100));
+        return { 
+          status: 'pending', 
+          progress, 
+          message: `${memberCount} presenças. Precisa superar o 10º lugar (${tenthPlaceCount}).`
         };
       }
     },

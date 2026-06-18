@@ -52,7 +52,18 @@ export const calculateBadges = (
         type: 'attendance',
         dateEarned: now.toISOString()
       });
-    } else if (memberRank <= 10 && memberRank > 0) {
+    }
+    if (memberRank <= 5 && memberRank > 0) {
+      badges.push({
+        id: 'top-5-month',
+        title: 'Top 5 do Mês',
+        description: `Entre os 5 alunos com mais presenças em ${now.toLocaleString('pt-BR', { month: 'long' })}.`,
+        icon: 'TrendingUp',
+        type: 'attendance',
+        dateEarned: now.toISOString()
+      });
+    }
+    if (memberRank <= 10 && memberRank > 0) {
       badges.push({
         id: 'top-10-month',
         title: 'Top 10 do Mês',

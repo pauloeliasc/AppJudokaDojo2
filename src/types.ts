@@ -64,6 +64,8 @@ export interface ClassSession {
   maxStudents?: number;
   description?: string;
   scheduleId?: string; // Reference to fixed schedule slot
+  isCanceled?: boolean;
+  cancelReason?: string;
 }
 
 export interface Schedule {

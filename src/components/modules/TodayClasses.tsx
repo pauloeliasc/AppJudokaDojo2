@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { db, doc } from '../../lib/firebase';
 import { collection, query, onSnapshot, where, collectionGroup, setDoc, deleteDoc } from 'firebase/firestore';
 import { Profile, ClassSession, Schedule, Presence, UserRole } from '../../types';
-import { Star, Clock, Activity, Loader2, AlertCircle, Users, EyeOff, Lock } from 'lucide-react';
+import { Star, Clock, Activity, Loader2, AlertCircle, Users, EyeOff, Lock, XCircle, RefreshCw } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { cn } from '../../lib/utils';
 import { profilesApi, classesApi } from '../../services/firestoreService';
 
@@ -218,6 +219,123 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
     }
   };
 
+  // State and methods for Administrator to cancel/restore classes
+  const [cancelingItemId, setCancelingItemId] = useState<string | null>(null);
+  const [cancelReasonText, setCancelReasonText] = useState<string>('');
+  const [cancelingAll, setCancelingAll] = useState(false);
+  const [cancelAllReasonText, setCancelAllReasonText] = useState('Feriado / Imprevisto');
+
+  const handleCancelClass = async (item: Schedule | ClassSession, isSpecial: boolean, reason: string) => {
+    const id = isSpecial ? (item as ClassSession).id : (item as Schedule).id;
+    setLoading('cancel-' + id);
+    try {
+      let classSession = isSpecial ? (item as ClassSession) : classes.find(c => c.scheduleId === (item as Schedule).id && c.date.startsWith(dateStr));
+      
+      if (classSession) {
+        await classesApi.update(classSession.id, {
+          isCanceled: true,
+          cancelReason: reason || 'Motivo não informado'
+        });
+      } else {
+        const schedule = item as Schedule;
+        const newSession: Omit<ClassSession, 'id'> = {
+          title: `Treino de ${['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'][schedule.dayOfWeek]}`,
+          date: dateStr,
+          time: schedule.time,
+          professorId: schedule.professorId || 'admin',
+          type: schedule.type,
+          scheduleId: schedule.id,
+          isCanceled: true,
+          cancelReason: reason || 'Motivo não informado'
+        };
+        await classesApi.create(newSession as any);
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert(`Erro ao cancelar aula: ${e.message || 'Erro desconhecido'}`);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleReactivateClass = async (item: Schedule | ClassSession, isSpecial: boolean) => {
+    const id = isSpecial ? (item as ClassSession).id : (item as Schedule).id;
+    setLoading('reactivate-' + id);
+    try {
+      let classSession = isSpecial ? (item as ClassSession) : classes.find(c => c.scheduleId === (item as Schedule).id && c.date.startsWith(dateStr));
+      
+      if (classSession) {
+        await classesApi.update(classSession.id, {
+          isCanceled: false,
+          cancelReason: ''
+        });
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert(`Erro ao reativar aula: ${e.message || 'Erro desconhecido'}`);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleCancelAllClasses = async (reason: string) => {
+    setLoading('cancel-all');
+    try {
+      for (const item of allItems) {
+        const isSpecial = 'isClass' in item;
+        let classSession = isSpecial ? (item as ClassSession) : classes.find(c => c.scheduleId === (item as Schedule).id && c.date.startsWith(dateStr));
+        
+        if (classSession) {
+          await classesApi.update(classSession.id, {
+            isCanceled: true,
+            cancelReason: reason || 'Motivo imprevisto / Feriado'
+          });
+        } else {
+          const schedule = item as Schedule;
+          const newSession: Omit<ClassSession, 'id'> = {
+            title: `Treino de ${['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'][schedule.dayOfWeek]}`,
+            date: dateStr,
+            time: schedule.time,
+            professorId: schedule.professorId || 'admin',
+            type: schedule.type,
+            scheduleId: schedule.id,
+            isCanceled: true,
+            cancelReason: reason || 'Motivo imprevisto / Feriado'
+          };
+          await classesApi.create(newSession as any);
+        }
+      }
+      setCancelingAll(false);
+    } catch (e: any) {
+      console.error(e);
+      alert(`Erro ao cancelar todas as aulas: ${e.message || 'Erro desconhecido'}`);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleReactivateAllClasses = async () => {
+    setLoading('reactivate-all');
+    try {
+      for (const item of allItems) {
+        const isSpecial = 'isClass' in item;
+        let classSession = isSpecial ? (item as ClassSession) : classes.find(c => c.scheduleId === (item as Schedule).id && c.date.startsWith(dateStr));
+        
+        if (classSession) {
+          await classesApi.update(classSession.id, {
+            isCanceled: false,
+            cancelReason: ''
+          });
+        }
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert(`Erro ao reativar todas as aulas: ${e.message || 'Erro desconhecido'}`);
+    } finally {
+      setLoading(null);
+    }
+  };
+
   const allItems = [
     ...specialClasses.map(c => ({ ...c, isClass: true as const })),
     ...todaySchedules.map(s => ({ ...s, isSchedule: true as const }))
@@ -227,39 +345,123 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
 
   return (
     <div className="bg-white p-8 rounded-[2.5rem] border border-[#0a0a0a]/5 shadow-sm">
-      <div className="flex items-center gap-3 mb-6">
-        <Activity className="w-6 h-6 text-indigo-500" />
-        <h3 className="font-bold text-xl uppercase tracking-tight">Treinos Disponíveis Hoje</h3>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <Activity className="w-6 h-6 text-indigo-500" />
+          <h3 className="font-bold text-xl uppercase tracking-tight">Treinos Disponíveis Hoje</h3>
+        </div>
       </div>
+
+      {isAdminOrProfessor && (
+        <div className="mb-8 p-6 bg-slate-50 border border-slate-200/65 rounded-3xl flex flex-col lg:flex-row lg:items-center justify-between gap-4 animate-fade-in">
+          <div className="space-y-1">
+            <h4 className="font-extrabold text-sm uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+              <span className="inline-block w-2 h-2 rounded-full bg-indigo-500"></span>
+              Painel de Interrupções / Imprevistos (Admin)
+            </h4>
+            <p className="text-[11px] text-slate-400 font-semibold leading-relaxed">
+              Cancele todas as sessões de treino de hoje por motivos de feriado, manutenção, etc., ou restaure-as com um clique.
+            </p>
+          </div>
+          
+          {cancelingAll ? (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full lg:w-auto">
+              <input
+                type="text"
+                value={cancelAllReasonText}
+                onChange={(e) => setCancelAllReasonText(e.target.value)}
+                placeholder="Ex: Feriado de Corpus Christi / Imprevisto"
+                className="bg-white border border-slate-200 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/10 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-850 outline-none transition-all flex-1 min-w-[240px]"
+              />
+              <div className="flex gap-2 shrink-0">
+                <button
+                  disabled={loading === 'cancel-all'}
+                  onClick={() => handleCancelAllClasses(cancelAllReasonText)}
+                  className="flex-1 sm:flex-initial px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black text-[11px] uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {loading === 'cancel-all' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+                  Confirmar Cancelar Hoje
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCancelingAll(false)}
+                  className="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all cursor-pointer"
+                >
+                  Voltar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 w-full lg:w-auto shrink-0">
+              <button
+                disabled={loading !== null}
+                onClick={() => setCancelingAll(true)}
+                className="flex-1 lg:flex-initial px-4 py-3 bg-rose-50/70 hover:bg-rose-100 text-rose-600 border border-rose-200/50 rounded-xl font-extrabold text-[11px] uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <XCircle className="w-4 h-4" />
+                Cancelar Todas do Dia
+              </button>
+              <button
+                disabled={loading !== null}
+                onClick={handleReactivateAllClasses}
+                className="flex-1 lg:flex-initial px-4 py-3 bg-emerald-50/70 hover:bg-emerald-100 text-emerald-600 border border-emerald-250/50 rounded-xl font-extrabold text-[11px] uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Reativar Todas
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {allItems.map((item, idx) => {
           const id = 'isClass' in item ? item.id : item.id;
           const classSession = 'isClass' in item ? item : classes.find(c => c.scheduleId === (item as Schedule).id && c.date.startsWith(dateStr));
+          const isClassCanceled = classSession?.isCanceled === true;
           const hasCheckedIn = classSession ? userPresences[classSession.id] : false;
-          const isLoading = loading === id;
+          const isLoading = loading === id || loading === `cancel-${id}` || loading === `reactivate-${id}`;
           const classPresences = classSession ? allTodayPresences.filter(p => p.classId === classSession.id) : [];
 
           return (
             <div key={idx} className={cn(
-              "p-6 rounded-2xl border transition-all flex flex-col justify-between",
-              hasCheckedIn ? "bg-emerald-50 border-emerald-100" : "bg-slate-50 border-slate-100"
+              "p-6 rounded-[2rem] border transition-all flex flex-col justify-between",
+              isClassCanceled 
+                ? "bg-rose-50/20 border-rose-200/40" 
+                : hasCheckedIn 
+                  ? "bg-emerald-50 border-emerald-100" 
+                  : "bg-slate-50 border-slate-100"
             )}>
               <div>
                 <div className="flex justify-between items-start mb-4">
-                  <div className={cn("p-2 rounded-lg", 'isClass' in item ? "bg-amber-100 text-amber-600" : "bg-indigo-100 text-indigo-600")}>
-                    {'isClass' in item ? <Star className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                  <div className={cn("p-2 rounded-lg", isClassCanceled ? "bg-rose-100 text-rose-600" : 'isClass' in item ? "bg-amber-100 text-amber-600" : "bg-indigo-100 text-indigo-600")}>
+                    {isClassCanceled ? <XCircle className="w-4 h-4" /> : 'isClass' in item ? <Star className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
                   </div>
                   <span className="text-[10px] font-bold text-slate-400">{item.time}</span>
                 </div>
-                <h4 className="font-bold text-slate-900 mb-1">
+                <h4 className={cn("font-bold mb-1", isClassCanceled ? "text-slate-500 line-through" : "text-slate-900")}>
                   {'isClass' in item ? item.title : `Treino de ${item.type}`}
                 </h4>
                 <div className="flex gap-2">
                   <span className="text-[9px] font-black uppercase tracking-widest text-[#0a0a0a]/40">{item.type}</span>
                   {'isClass' in item && <span className="bg-amber-500 text-white text-[7px] font-black uppercase px-1.5 rounded">Especial</span>}
+                  {isClassCanceled && <span className="bg-rose-550 text-rose-600 border border-rose-200 text-[8px] font-black uppercase px-2 rounded-lg">Cancelada</span>}
                 </div>
-                {classSession && (
+
+                {/* Cancellation Banner */}
+                {isClassCanceled && (
+                  <div className="mt-4 p-3 bg-rose-50/55 border border-rose-150 rounded-xl text-rose-900 text-[11px] font-medium flex flex-col gap-1.5 shrink-0 animate-fade-in">
+                    <div className="font-extrabold uppercase tracking-wide text-rose-700 flex items-center gap-1 text-[10px]">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-600 animate-pulse" />
+                      <span>SESSÃO INTERROMPIDA</span>
+                    </div>
+                    <p className="font-bold text-rose-700 leading-tight">
+                      {classSession?.cancelReason || 'Motivo imprevisto informado pela coordenação.'}
+                    </p>
+                  </div>
+                )}
+
+                {!isClassCanceled && classSession && (
                   <div className="mt-2 flex items-center gap-1.5">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     <span className="text-[10px] font-bold text-slate-500 tracking-tight">
@@ -271,7 +473,7 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
                   </div>
                 )}
 
-                {classSession && (isAdminOrProfessor ? classPresences.length > 0 : hasCheckedIn) && (
+                {!isClassCanceled && classSession && (isAdminOrProfessor ? classPresences.length > 0 : hasCheckedIn) && (
                   <div className="mt-4 pt-3 border-t border-slate-200/50">
                     <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
                       <span>{isAdminOrProfessor ? `No treino agora (${classPresences.length})` : 'Seu check-in'}</span>
@@ -326,38 +528,106 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
                 )}
               </div>
 
-              {hasCheckedIn && confirmCancelId === id ? (
-                <div className="mt-6 flex gap-2 w-full animate-fade-in/10">
+              {isClassCanceled ? (
+                isAdminOrProfessor ? (
                   <button
                     disabled={isLoading}
-                    onClick={() => handleCancelCheckIn(item as any, 'isClass' in item)}
-                    className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all hover:bg-rose-700 shadow-md shadow-rose-500/15"
+                    onClick={() => handleReactivateClass(item as any, 'isClass' in item)}
+                    className="mt-6 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-500/15 cursor-pointer"
                   >
-                    {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <AlertCircle className="w-3.5 h-3.5" />}
-                    Confirmar
+                    {loading === `reactivate-${id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                    Reativar Aula
                   </button>
-                  <button
-                    disabled={isLoading}
-                    onClick={() => setConfirmCancelId(null)}
-                    className="flex-1 py-3 bg-slate-200 text-slate-700 rounded-xl font-bold text-[11px] uppercase tracking-wider flex items-center justify-center transition-all hover:bg-slate-300"
-                  >
-                    Voltar
-                  </button>
-                </div>
+                ) : (
+                  <div className="mt-6 w-full py-3.5 bg-slate-100 border border-slate-200 text-slate-400 font-extrabold text-[10px] uppercase tracking-widest text-center rounded-xl cursor-not-allowed select-none">
+                    Aula Indisponível
+                  </div>
+                )
               ) : (
-                <button
-                  disabled={isLoading}
-                  onClick={() => hasCheckedIn ? handleCancelCheckIn(item as any, 'isClass' in item) : handleCheckIn(item as any, 'isClass' in item)}
-                  className={cn(
-                    "mt-6 w-full py-3 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all",
-                    hasCheckedIn 
-                      ? "bg-rose-500 text-white shadow-lg shadow-rose-500/20 hover:bg-rose-600" 
-                      : "bg-[#0a0a0a] text-[#ffffff] hover:scale-[1.02] shadow-lg"
+                <>
+                  {hasCheckedIn && confirmCancelId === id ? (
+                    <div className="mt-6 flex gap-2 w-full animate-fade-in/10">
+                      <button
+                        disabled={isLoading}
+                        onClick={() => handleCancelCheckIn(item as any, 'isClass' in item)}
+                        className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all hover:bg-rose-700 shadow-md shadow-rose-500/15"
+                      >
+                        {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                        Confirmar
+                      </button>
+                      <button
+                        disabled={isLoading}
+                        onClick={() => setConfirmCancelId(null)}
+                        className="flex-1 py-3 bg-slate-200 text-slate-700 rounded-xl font-bold text-[11px] uppercase tracking-wider flex items-center justify-center transition-all hover:bg-slate-300"
+                      >
+                        Voltar
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      disabled={isLoading}
+                      onClick={() => hasCheckedIn ? handleCancelCheckIn(item as any, 'isClass' in item) : handleCheckIn(item as any, 'isClass' in item)}
+                      className={cn(
+                        "mt-6 w-full py-3 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all",
+                        hasCheckedIn 
+                          ? "bg-rose-500 text-white shadow-lg shadow-rose-500/20 hover:bg-rose-600" 
+                          : "bg-[#0a0a0a] text-[#ffffff] hover:scale-[1.02] shadow-lg"
+                      )}
+                    >
+                      {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : hasCheckedIn ? <AlertCircle className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
+                      {hasCheckedIn ? 'Cancelar Check-in' : 'Fazer Check-in'}
+                    </button>
                   )}
-                >
-                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : hasCheckedIn ? <AlertCircle className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
-                  {hasCheckedIn ? 'Cancelar Check-in' : 'Fazer Check-in'}
-                </button>
+
+                  {/* Inline Single-Class Cancel Panel for Administrator */}
+                  {isAdminOrProfessor && (
+                    <>
+                      {cancelingItemId === id ? (
+                        <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-2xl flex flex-col gap-2 animate-fade-in">
+                          <div>
+                            <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 block mb-1">Motivo do Cancelamento</label>
+                            <input
+                              type="text"
+                              value={cancelReasonText}
+                              onChange={(e) => setCancelReasonText(e.target.value)}
+                              placeholder="..."
+                              className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500 transition-all"
+                            />
+                          </div>
+                          <div className="flex gap-1.5">
+                            <button
+                              disabled={isLoading}
+                              onClick={async () => {
+                                await handleCancelClass(item as any, 'isClass' in item, cancelReasonText);
+                                setCancelingItemId(null);
+                              }}
+                              className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-black text-[9px] uppercase tracking-wider text-center cursor-pointer shadow-sm"
+                            >
+                              Confirmar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCancelingItemId(null)}
+                              className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-750 rounded-lg font-black text-[9px] uppercase tracking-wider text-center cursor-pointer"
+                            >
+                              Sair
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setCancelingItemId(id);
+                            setCancelReasonText('Imprevisto / Feriado');
+                          }}
+                          className="mt-2.5 text-[10px] text-rose-500 hover:text-rose-700 font-extrabold uppercase tracking-widest text-center py-2 w-full border border-dashed border-rose-200 hover:border-rose-450 bg-rose-50/20 hover:bg-rose-50/50 rounded-xl transition-all cursor-pointer"
+                        >
+                          Cancelar este treino
+                        </button>
+                      )}
+                    </>
+                  )}
+                </>
               )}
             </div>
           );
