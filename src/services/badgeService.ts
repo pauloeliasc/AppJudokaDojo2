@@ -1,4 +1,4 @@
-import { Presence, Payment, Badge } from '../types';
+import { Presence, Payment, Badge, Profile, UserRole } from '../types';
 import { 
   Trophy, 
   Target, 
@@ -16,10 +16,22 @@ export const calculateBadges = (
   memberId: string, 
   memberPresences: Presence[], 
   allPresences: Presence[], 
-  memberPayments: Payment[]
+  memberPayments: Payment[],
+  profiles?: Profile[]
 ): Badge[] => {
   const badges: Badge[] = [];
   const now = new Date();
+  
+  // If we have profiles, verify if the evaluated member is a student. Only students get achievements.
+  if (profiles) {
+    const targetProfile = profiles.find(p => p.id === memberId);
+    if (targetProfile) {
+      const isStudent = !targetProfile.role || targetProfile.role === UserRole.STUDENT;
+      if (!isStudent) {
+        return [];
+      }
+    }
+  }
   
   // --- Attendance Badges ---
   
@@ -28,10 +40,20 @@ export const calculateBadges = (
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
   
-  const currentMonthPresences = allPresences.filter(p => {
+  let currentMonthPresences = allPresences.filter(p => {
     const d = new Date(p.timestamp);
     return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
   });
+
+  // Filter out any check-ins that do not belong to students
+  if (profiles) {
+    const studentIds = new Set(
+      profiles
+        .filter(p => !p.role || p.role === UserRole.STUDENT)
+        .map(p => p.id)
+    );
+    currentMonthPresences = currentMonthPresences.filter(p => studentIds.has(p.memberId));
+  }
   
   const memberCounts = currentMonthPresences.reduce((acc, p) => {
     acc[p.memberId] = (acc[p.memberId] || 0) + 1;

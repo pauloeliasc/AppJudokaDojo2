@@ -3,7 +3,8 @@ import { Profile, Presence, Payment, ClassSession, UserRole } from '../../types'
 import { 
   presencesApi, 
   paymentsApi, 
-  classesApi 
+  classesApi,
+  profilesApi
 } from '../../services/firestoreService';
 import { useAuth } from '../../AuthContext';
 import { calculateBadges, getBadgeIcon } from '../../services/badgeService';
@@ -45,6 +46,7 @@ export default function MemberDetailsModal({ profile, onClose }: MemberDetailsMo
   const [payments, setPayments] = useState<Payment[]>([]);
   const [allClasses, setAllClasses] = useState<ClassSession[]>([]);
   const [allGlobalPresences, setAllGlobalPresences] = useState<Presence[]>([]);
+  const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [familyMembers, setFamilyMembers] = useState<Profile[]>([]);
@@ -178,18 +180,21 @@ export default function MemberDetailsModal({ profile, onClose }: MemberDetailsMo
           memberPresences, 
           memberPayments, 
           classes, 
-          globalPresences
+          globalPresences,
+          pfs
         ] = await Promise.all([
           presencesApi.getByMember(profile.id),
           paymentsApi.getByUser(profile.id),
           classesApi.getAll(),
-          presencesApi.getAllGlobal()
+          presencesApi.getAllGlobal(),
+          profilesApi.getAll()
         ]);
 
         setPresences(memberPresences);
         setPayments(memberPayments);
         setAllClasses(classes);
         setAllGlobalPresences(globalPresences);
+        setAllProfiles(pfs);
       } catch (error) {
         console.error("Error fetching member details:", error);
       } finally {
@@ -200,7 +205,7 @@ export default function MemberDetailsModal({ profile, onClose }: MemberDetailsMo
     fetchData();
   }, [profile.id]);
 
-  const badges = calculateBadges(profile.id, presences, allGlobalPresences, payments);
+  const badges = calculateBadges(profile.id, presences, allGlobalPresences, payments, allProfiles);
 
   // Statistics
   const mostFrequentedClassType = presences.reduce((acc, p) => {

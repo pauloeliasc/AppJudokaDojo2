@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { db, doc } from '../../lib/firebase';
 import { collection, query, where, onSnapshot, collectionGroup } from 'firebase/firestore';
-import { Profile, Presence, Payment, Badge } from '../../types';
+import { Profile, Presence, Payment, Badge, UserRole } from '../../types';
 import { calculateBadges, getBadgeIcon } from '../../services/badgeService';
 import { useAuth } from '../../AuthContext';
 import { Trophy, Target, Clock, Star, Activity, Loader2, ChevronRight, Award, TrendingUp } from 'lucide-react';
@@ -13,6 +13,7 @@ export default function StudentAchievements({ profileId: forcedProfileId }: { pr
   const [memberPresences, setMemberPresences] = useState<Presence[]>([]);
   const [allPresences, setAllPresences] = useState<Presence[]>([]);
   const [memberPayments, setMemberPayments] = useState<Payment[]>([]);
+  const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -46,6 +47,10 @@ export default function StudentAchievements({ profileId: forcedProfileId }: { pr
       }
     );
 
+    const unsubProfiles = onSnapshot(collection(db, 'profiles'), (snapshot) => {
+      setAllProfiles(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Profile)));
+    });
+
     setLoading(false);
 
     return () => {
@@ -53,6 +58,7 @@ export default function StudentAchievements({ profileId: forcedProfileId }: { pr
       unsubMemberPresences();
       unsubAllPresences();
       unsubPayments();
+      unsubProfiles();
     };
   }, [user, forcedProfileId]);
 
@@ -65,7 +71,33 @@ export default function StudentAchievements({ profileId: forcedProfileId }: { pr
     );
   }
 
-  const earnedBadges = calculateBadges(profile.id, memberPresences, allPresences, memberPayments);
+  const isStudent = !profile.role || profile.role === UserRole.STUDENT;
+
+  if (!isStudent) {
+    return (
+      <div className="space-y-10 pb-20">
+        <header className="flex items-center gap-5">
+          <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
+            <Trophy className="text-white w-8 h-8" />
+          </div>
+          <div>
+            <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Conquistas</h2>
+            <p className="text-slate-500 text-sm font-medium">Acompanhe a sua evolução e desbloqueie novos marcos.</p>
+          </div>
+        </header>
+
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/50 shadow-sm text-center max-w-lg mx-auto mt-10">
+          <Award className="w-16 h-16 text-indigo-500 mx-auto mb-4 animate-pulse" />
+          <h3 className="text-xl font-bold text-slate-800 mb-2">Painel de Conquistas</h3>
+          <p className="text-sm text-slate-500 leading-relaxed">
+            As conquistas, rankings e medalhas virtuais são pontuadas e exibidas exclusivamente para contas de Alunos.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const earnedBadges = calculateBadges(profile.id, memberPresences, allPresences, memberPayments, allProfiles);
   const earnedIds = new Set(earnedBadges.map(b => b.id));
 
   // Define potential badges and their progress criteria
@@ -83,7 +115,13 @@ export default function StudentAchievements({ profileId: forcedProfileId }: { pr
           const d = new Date(p.timestamp);
           return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
         });
-        const memberCounts = currentMonthPresences.reduce((acc, p) => {
+        const studentIds = new Set(
+          allProfiles
+            .filter(p => !p.role || p.role === UserRole.STUDENT)
+            .map(p => p.id)
+        );
+        const studentMonthPresences = currentMonthPresences.filter(p => studentIds.has(p.memberId));
+        const memberCounts = studentMonthPresences.reduce((acc, p) => {
           acc[p.memberId] = (acc[p.memberId] || 0) + 1;
           return acc;
         }, {} as Record<string, number>);
@@ -115,7 +153,13 @@ export default function StudentAchievements({ profileId: forcedProfileId }: { pr
           const d = new Date(p.timestamp);
           return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
         });
-        const memberCounts = currentMonthPresences.reduce((acc, p) => {
+        const studentIds = new Set(
+          allProfiles
+            .filter(p => !p.role || p.role === UserRole.STUDENT)
+            .map(p => p.id)
+        );
+        const studentMonthPresences = currentMonthPresences.filter(p => studentIds.has(p.memberId));
+        const memberCounts = studentMonthPresences.reduce((acc, p) => {
           acc[p.memberId] = (acc[p.memberId] || 0) + 1;
           return acc;
         }, {} as Record<string, number>);
@@ -147,7 +191,13 @@ export default function StudentAchievements({ profileId: forcedProfileId }: { pr
           const d = new Date(p.timestamp);
           return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
         });
-        const memberCounts = currentMonthPresences.reduce((acc, p) => {
+        const studentIds = new Set(
+          allProfiles
+            .filter(p => !p.role || p.role === UserRole.STUDENT)
+            .map(p => p.id)
+        );
+        const studentMonthPresences = currentMonthPresences.filter(p => studentIds.has(p.memberId));
+        const memberCounts = studentMonthPresences.reduce((acc, p) => {
           acc[p.memberId] = (acc[p.memberId] || 0) + 1;
           return acc;
         }, {} as Record<string, number>);
