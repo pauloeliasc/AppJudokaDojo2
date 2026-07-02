@@ -849,15 +849,11 @@ function PresenceModal({ session, profiles, onClose }: { session: ClassSession, 
           await profilesApi.update(studentId, { points: Math.max(0, (currentStudent.points || 0) - 10) });
         }
       } else {
-        const now = new Date();
-        const todayStr = now.getFullYear() + '-' + 
-          String(now.getMonth() + 1).padStart(2, '0') + '-' + 
-          String(now.getDate()).padStart(2, '0');
         await setDoc(presenceRef, {
           memberId: studentId,
           classId: session.id,
           timestamp: new Date().toISOString(),
-          checkInDate: todayStr,
+          checkInDate: session.date,
           pointsAwarded: 10
         });
         // Add points for attending

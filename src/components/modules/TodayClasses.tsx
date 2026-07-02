@@ -133,6 +133,30 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
   // Special classes for today
   const specialClasses = classes.filter(c => c.isSpecial && c.date.startsWith(dateStr));
 
+  // Find day of week for panelDate safely (using local timezone parts)
+  const panelDayOfWeek = React.useMemo(() => {
+    if (!panelDate) return 0;
+    const parts = panelDate.split('-');
+    if (parts.length !== 3) return 0;
+    const selectedDateObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    return selectedDateObj.getDay();
+  }, [panelDate]);
+
+  const panelSchedules = React.useMemo(() => {
+    return schedules.filter(s => s.dayOfWeek === panelDayOfWeek);
+  }, [schedules, panelDayOfWeek]);
+
+  const panelSpecialClasses = React.useMemo(() => {
+    return classes.filter(c => c.isSpecial && c.date.startsWith(panelDate));
+  }, [classes, panelDate]);
+
+  const panelAllItems = React.useMemo(() => {
+    return [
+      ...panelSpecialClasses.map(c => ({ ...c, isClass: true as const })),
+      ...panelSchedules.map(s => ({ ...s, isSchedule: true as const }))
+    ];
+  }, [panelSpecialClasses, panelSchedules]);
+
   const handleCheckIn = async (item: Schedule | ClassSession, isSpecial: boolean) => {
     if (!profile) {
       alert('Perfil não encontrado. Por favor, tente recarregar a página.');
@@ -260,6 +284,46 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
     } catch (e: any) {
       console.error(e);
       alert(`Erro ao abrir chamada: ${e.message || 'Erro desconhecido'}`);
+    } finally {
+      setLoadingChamadaId(null);
+    }
+  };
+
+  const handleOpenChamadaRetroactive = async (item: Schedule | ClassSession, isSpecial: boolean) => {
+    const itemId = isSpecial ? (item as ClassSession).id : (item as Schedule).id;
+    setLoadingChamadaId(itemId);
+    try {
+      let classSession: ClassSession | undefined;
+      if (isSpecial) {
+        classSession = item as ClassSession;
+      } else {
+        const schedule = item as Schedule;
+        // Find existing class session for this schedule on panelDate
+        classSession = classes.find(c => c.scheduleId === schedule.id && c.date === panelDate);
+        if (!classSession) {
+          // Create a new session for the selected retroactive date
+          const newSession: Omit<ClassSession, 'id'> = {
+            title: `Treino de ${['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'][schedule.dayOfWeek]}`,
+            date: panelDate,
+            time: schedule.time,
+            professorId: schedule.professorId || 'admin',
+            type: schedule.type,
+            scheduleId: schedule.id
+          };
+          const newId = await classesApi.create(newSession as any) || '';
+          if (!newId) throw new Error('Não foi possível criar a sessão de aula retroativa.');
+          // Construct class session object
+          classSession = {
+            id: newId,
+            ...newSession
+          } as ClassSession;
+        }
+      }
+      setSelectedClassForChamada(classSession);
+      setIsChamadaModalOpen(true);
+    } catch (e: any) {
+      console.error(e);
+      alert(`Erro ao abrir chamada retroativa: ${e.message || 'Erro desconhecido'}`);
     } finally {
       setLoadingChamadaId(null);
     }
@@ -788,6 +852,84 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
             </div>
           </div>
 
+          {/* Retroactive Attendance Panel */}
+          <div className="mb-10 p-6 bg-slate-50/70 border border-slate-100 rounded-[2rem] animate-fade-in shadow-inner">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse"></span>
+              <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-700">
+                Lançar Presenças Retroativas ({panelDate.split('-').reverse().join('/')})
+              </h4>
+            </div>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mb-5 leading-relaxed">
+              Visualize os treinos previstos para este dia da semana e faça ou edite a chamada diretamente.
+            </p>
+            
+            {panelAllItems.length === 0 ? (
+              <div className="py-6 text-center border border-dashed border-slate-200 rounded-2xl bg-white">
+                <AlertCircle className="w-5 h-5 text-slate-300 mx-auto mb-1.5" />
+                <p className="text-[11px] font-bold text-slate-400">Nenhum treino programado ou especial para este dia da semana.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {panelAllItems.map((item, idx) => {
+                  const id = 'isClass' in item ? item.id : item.id;
+                  const correspondingClass = 'isClass' in item 
+                    ? item 
+                    : classes.find(c => c.scheduleId === (item as Schedule).id && c.date === panelDate);
+                  const hasSession = !!correspondingClass;
+                  const isCanceled = correspondingClass?.isCanceled === true;
+
+                  return (
+                    <div key={idx} className={cn(
+                      "p-4 rounded-2xl border flex flex-col justify-between bg-white shadow-sm transition-all hover:border-slate-200/80",
+                      isCanceled ? "border-rose-100 bg-rose-50/10" : "border-slate-100"
+                    )}>
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-[10px] font-extrabold text-slate-400">{item.time}</span>
+                          <span className={cn(
+                            "text-[8px] font-black uppercase px-2 py-0.5 rounded-full",
+                            hasSession 
+                              ? isCanceled ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700" 
+                              : "bg-slate-100 text-slate-500"
+                          )}>
+                            {hasSession ? isCanceled ? 'Cancelada' : 'Sessão Ativa' : 'Sem Sessão Ativa'}
+                          </span>
+                        </div>
+                        <h5 className="font-extrabold text-slate-800 text-sm leading-tight">
+                          {'isClass' in item ? item.title : `Treino de ${item.type}`}
+                        </h5>
+                      </div>
+                      
+                      <button
+                        disabled={loadingChamadaId === id}
+                        onClick={() => handleOpenChamadaRetroactive(item, 'isClass' in item)}
+                        className={cn(
+                          "mt-4 w-full py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all cursor-pointer border",
+                          hasSession 
+                            ? isCanceled 
+                              ? "bg-rose-50 text-rose-600 border-rose-200/50 hover:bg-rose-100" 
+                              : "bg-emerald-50 text-emerald-750 border-emerald-100 hover:bg-emerald-100"
+                            : "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-100/40"
+                        )}
+                      >
+                        {loadingChamadaId === id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Users className="w-3.5 h-3.5" />
+                        )}
+                        {hasSession 
+                          ? isCanceled ? 'Ver/Reabrir Chamada' : 'Fazer/Alterar Chamada' 
+                          : 'Iniciar Chamada'
+                        }
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* Display filtered results */}
           {panelPresences.length === 0 ? (
             <div className="bg-slate-50/50 border border-dashed border-slate-200 rounded-3xl p-10 text-center">
@@ -940,15 +1082,11 @@ function ChamadaModal({ session, profiles, onClose }: { session: ClassSession, p
           await profilesApi.update(studentId, { points: Math.max(0, (currentStudent.points || 0) - 10) });
         }
       } else {
-        const now = new Date();
-        const todayStr = now.getFullYear() + '-' + 
-          String(now.getMonth() + 1).padStart(2, '0') + '-' + 
-          String(now.getDate()).padStart(2, '0');
         await setDoc(presenceRef, {
           memberId: studentId,
           classId: session.id,
           timestamp: new Date().toISOString(),
-          checkInDate: todayStr,
+          checkInDate: session.date,
           pointsAwarded: 10
         });
         // Add points for attending
