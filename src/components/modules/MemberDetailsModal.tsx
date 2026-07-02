@@ -539,9 +539,9 @@ export default function MemberDetailsModal({ profile, onClose }: MemberDetailsMo
                         </div>
                       ) : familyMembers.length > 0 ? (
                         <div className="space-y-3 max-h-[240px] overflow-y-auto pr-1">
-                          {familyMembers.map((member) => (
+                          {familyMembers.map((member, idx) => (
                             <div 
-                              key={member.id}
+                              key={`${member.id}-${idx}`}
                               className="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-100 rounded-2xl group transition-all hover:bg-indigo-50/10"
                             >
                               <div className="flex items-center gap-3">
@@ -598,11 +598,11 @@ export default function MemberDetailsModal({ profile, onClose }: MemberDetailsMo
                 <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
                   {badges.length > 0 ? (
                     <div className="grid grid-cols-2 gap-4">
-                      {badges.map(badge => {
+                      {badges.map((badge, idx) => {
                         const Icon = getBadgeIcon(badge.icon);
                         return (
                           <div 
-                            key={badge.id}
+                            key={`${badge.id}-${idx}`}
                             className={cn(
                               "p-4 rounded-3xl border transition-all hover:scale-[1.02] cursor-default group",
                               badge.type === 'attendance' ? "bg-indigo-50/30 border-indigo-100" : "bg-amber-50/30 border-amber-100"

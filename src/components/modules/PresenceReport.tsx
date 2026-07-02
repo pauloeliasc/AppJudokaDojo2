@@ -1029,11 +1029,11 @@ export default function PresenceReport({
                 </div>
 
                 <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 text-xs scrollbar-thin">
-                  {filteredStudentProfiles.map((student) => {
+                  {filteredStudentProfiles.map((student, idx) => {
                     const isSelected = student.id === selectedStudentId;
                     return (
                       <button
-                        key={student.id}
+                        key={`${student.id}-${idx}`}
                         type="button"
                         onClick={() => setSelectedStudentId(student.id)}
                         className={cn(
@@ -1369,12 +1369,12 @@ export default function PresenceReport({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {activeStudentsList.map((student) => {
+                    {activeStudentsList.map((student, idx) => {
                       const payDoc = payments.find(p => p.memberId === student.id && p.month === reportMonth && p.year === reportYear);
                       const isPaid = payDoc?.status === 'paid';
 
                       return (
-                        <tr key={student.id} className="hover:bg-slate-50/30 transition-colors">
+                        <tr key={`${student.id}-${idx}`} className="hover:bg-slate-50/30 transition-colors">
                           <td className="px-6 py-4">
                             <span className="text-sm font-bold text-slate-900">{student.fullName}</span>
                           </td>

@@ -92,7 +92,7 @@ export default function FamilyManagement() {
 
   // Filter today's possible classes
   const todaySchedules = schedules.filter(s => s.dayOfWeek === dayOfWeek);
-  const todaySpecialClasses = classes.filter(c => c.isSpecial && c.date === dateStr);
+  const todaySpecialClasses = classes.filter(c => c.isSpecial && c.date.startsWith(dateStr));
 
   // Listen to presences in classes for all family members
   useEffect(() => {
@@ -470,14 +470,14 @@ export default function FamilyManagement() {
                 animate={{ opacity: 1 }}
                 className="grid grid-cols-1 md:grid-cols-2 gap-6"
               >
-                {familyMembers.map((member) => {
+                {familyMembers.map((member, idx) => {
                   const birthDisplay = member.birthDate 
                     ? new Date(member.birthDate + 'T00:00:00').toLocaleDateString('pt-BR')
                     : 'Não Cadastrada';
 
                   return (
                     <div 
-                      key={member.id}
+                      key={`${member.id}-${idx}`}
                       className="bg-white p-6 rounded-2xl border border-slate-200 hover:border-slate-300 shadow-sm transition-all hover:shadow-md flex flex-col justify-between"
                     >
                       <div className="space-y-4">
@@ -564,12 +564,12 @@ export default function FamilyManagement() {
             ) : (
               <div className="space-y-6">
                 {/* Fixed schedules */}
-                {todaySchedules.map((schedule) => {
+                {todaySchedules.map((schedule, idx) => {
                   const correspondingClass = classes.find(c => c.scheduleId === schedule.id && c.date === dateStr);
                   const activeClassId = correspondingClass?.id || '';
 
                   return (
-                    <div key={schedule.id} className="space-y-4 p-4 border border-slate-150 rounded-2xl bg-slate-50/50">
+                    <div key={`${schedule.id}-${idx}`} className="space-y-4 p-4 border border-slate-150 rounded-2xl bg-slate-50/50">
                       <div className="flex items-center justify-between">
                         <div>
                           <span className="bg-indigo-50 text-indigo-700 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase">{schedule.type}</span>
@@ -617,9 +617,9 @@ export default function FamilyManagement() {
                 })}
 
                 {/* Special/Created classes */}
-                {todaySpecialClasses.map((sClass) => {
+                {todaySpecialClasses.map((sClass, idx) => {
                   return (
-                    <div key={sClass.id} className="space-y-4 p-4 border border-purple-150 bg-purple-50/10 rounded-2xl">
+                    <div key={`${sClass.id}-${idx}`} className="space-y-4 p-4 border border-purple-150 bg-purple-50/10 rounded-2xl">
                       <div className="flex items-center justify-between">
                         <div>
                           <span className="bg-purple-100 text-purple-700 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase">Especial</span>

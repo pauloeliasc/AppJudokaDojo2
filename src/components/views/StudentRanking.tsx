@@ -33,7 +33,7 @@ export default function StudentRanking() {
 
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
         {leaderboard.map((p, i) => (
-          <div key={p.id} className={cn(
+          <div key={`${p.id}-${i}`} className={cn(
             "p-6 flex items-center gap-6 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors",
             i === 0 ? "bg-amber-50/30" : ""
           )}>

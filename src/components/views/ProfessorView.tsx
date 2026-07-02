@@ -128,8 +128,8 @@ function ProfessorHome({ profiles, classes, schedules, profile, payments }: { pr
         </h3>
         <div className="space-y-4">
            {classes.length > 0 ? (
-             classes.slice(0, 3).map(c => (
-              <div key={c.id} className="flex justify-between items-center p-5 bg-slate-50 border border-slate-100 rounded-xl hover:border-indigo-200 transition-colors group">
+             classes.slice(0, 3).map((c, idx) => (
+              <div key={`${c.id}-${idx}`} className="flex justify-between items-center p-5 bg-slate-50 border border-slate-100 rounded-xl hover:border-indigo-200 transition-colors group">
                 <div>
                   <p className="font-bold text-slate-800">{c.title || 'Treino Geral'}</p>
                   <p className="text-xs text-slate-400 font-bold uppercase mt-0.5">{new Date(c.date).toLocaleDateString('pt-BR')}</p>

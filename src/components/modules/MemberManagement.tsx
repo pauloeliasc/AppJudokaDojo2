@@ -334,9 +334,9 @@ export default function MemberManagement({ profiles, payments = [] }: { profiles
 
       {filtered.length > 0 ? (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          {filtered.map((profile) => (
+          {filtered.map((profile, idx) => (
             <MemberCard 
-              key={profile.id} 
+              key={`${profile.id}-${idx}`} 
               profile={profile} 
               payments={payments.filter(p => p.memberId === profile.id)}
               onEdit={() => setEditingProfile(profile)} 

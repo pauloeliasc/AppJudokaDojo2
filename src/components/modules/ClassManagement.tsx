@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ClassSession, Profile, UserRole, ClassType, Schedule } from '../../types';
 import { db, doc } from '../../lib/firebase';
 import { collection, deleteDoc, onSnapshot, setDoc } from 'firebase/firestore';
-import { Calendar, Plus, Users, Trash2, CheckCircle2, Clock, CalendarDays, Star, Layers, Activity, Pencil } from 'lucide-react';
+import { Calendar, Plus, Users, Trash2, CheckCircle2, Clock, CalendarDays, Star, Layers, Activity, Pencil, Search } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { classesApi, profilesApi, scheduleApi } from '../../services/firestoreService';
@@ -130,8 +130,8 @@ export default function ClassManagement({ classes, profiles }: { classes: ClassS
                   </div>
                   
                   <div className="space-y-2">
-                    {daySchedules.map(s => (
-                      <div key={s.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm group relative">
+                    {daySchedules.map((s, sIdx) => (
+                      <div key={`${s.id}-${sIdx}`} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm group relative">
                         <div className="flex justify-between items-start mb-2">
                           <span className="text-[10px] font-black text-slate-900">{s.time}</span>
                           <div className="flex gap-1">
@@ -199,8 +199,8 @@ export default function ClassManagement({ classes, profiles }: { classes: ClassS
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {classes.filter(c => c.isSpecial).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(c => (
-                <div key={c.id} className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex flex-col justify-between group">
+              {classes.filter(c => c.isSpecial).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map((c, idx) => (
+                <div key={`${c.id}-${idx}`} className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex flex-col justify-between group">
                   <div>
                     <div className="flex justify-between items-start mb-4">
                       <div className="p-3 bg-white rounded-xl shadow-sm text-amber-500">
@@ -233,8 +233,8 @@ export default function ClassManagement({ classes, profiles }: { classes: ClassS
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {classes.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((c) => (
-            <div key={c.id} className="bg-white rounded-[2rem] border border-slate-100 p-6 shadow-sm flex flex-col group hover:border-indigo-100 hover:shadow-md transition-all">
+          {classes.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((c, idx) => (
+            <div key={`${c.id}-${idx}`} className="bg-white rounded-[2rem] border border-slate-100 p-6 shadow-sm flex flex-col group hover:border-indigo-100 hover:shadow-md transition-all">
               <div className="flex justify-between items-start mb-4">
                 <div className={cn(
                   "p-3 rounded-2xl",
@@ -507,8 +507,8 @@ function AddClassModal({ profiles, onClose }: { profiles: Profile[], onClose: ()
                 onChange={e => setFormData({...formData, professorId: e.target.value})}
               >
                 <option value="">Selecione um Professor</option>
-                {profiles.filter(p => p.role === UserRole.PROFESSOR || p.role === UserRole.ADMIN).map(p => (
-                  <option key={p.id} value={p.id}>{p.fullName}</option>
+                {profiles.filter(p => p.role === UserRole.PROFESSOR || p.role === UserRole.ADMIN).map((p, idx) => (
+                  <option key={`${p.id}-${idx}`} value={p.id}>{p.fullName}</option>
                 ))}
               </select>
               <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
@@ -638,8 +638,8 @@ function AddScheduleModal({ profiles, onClose }: { profiles: Profile[], onClose:
                 onChange={e => setFormData({...formData, professorId: e.target.value})}
               >
                 <option value="">Selecione um Professor</option>
-                {profiles.filter(p => p.role === UserRole.PROFESSOR || p.role === UserRole.ADMIN).map(p => (
-                  <option key={p.id} value={p.id}>{p.fullName}</option>
+                {profiles.filter(p => p.role === UserRole.PROFESSOR || p.role === UserRole.ADMIN).map((p, idx) => (
+                  <option key={`${p.id}-${idx}`} value={p.id}>{p.fullName}</option>
                 ))}
               </select>
               <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
@@ -767,8 +767,8 @@ function EditScheduleModal({ schedule, profiles, onClose }: { schedule: Schedule
                 onChange={e => setFormData({...formData, professorId: e.target.value})}
               >
                 <option value="">Selecione um Professor</option>
-                {profiles.filter(p => p.role === UserRole.PROFESSOR || p.role === UserRole.ADMIN).map(p => (
-                  <option key={p.id} value={p.id}>{p.fullName}</option>
+                {profiles.filter(p => p.role === UserRole.PROFESSOR || p.role === UserRole.ADMIN).map((p, idx) => (
+                  <option key={`${p.id}-${idx}`} value={p.id}>{p.fullName}</option>
                 ))}
               </select>
               <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
@@ -804,6 +804,7 @@ function EditScheduleModal({ schedule, profiles, onClose }: { schedule: Schedule
 
 function PresenceModal({ session, profiles, onClose }: { session: ClassSession, profiles: Profile[], onClose: () => void }) {
   const [presences, setPresences] = useState<Record<string, boolean>>({});
+  const [searchTerm, setSearchTerm] = useState('');
   const students = profiles
     .filter(p => !p.role || p.role === UserRole.STUDENT)
     .sort((a, b) => {
@@ -817,6 +818,11 @@ function PresenceModal({ session, profiles, onClose }: { session: ClassSession, 
       if (numA !== numB) return numA - numB;
       return a.fullName.localeCompare(b.fullName);
     });
+
+  const filteredStudents = students.filter(s => 
+    s.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.callNumber && s.callNumber.toString().includes(searchTerm))
+  );
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, `classes/${session.id}/presences`), (snapshot) => {
@@ -883,11 +889,30 @@ function PresenceModal({ session, profiles, onClose }: { session: ClassSession, 
           </button>
         </div>
         
+        <div className="px-6 pb-4 pt-1 border-b border-slate-100 flex items-center gap-2">
+          <Search className="w-4 h-4 text-slate-400 shrink-0" />
+          <input
+            type="text"
+            placeholder="Pesquisar por nome ou nº de chamada..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full text-xs font-bold text-slate-700 bg-transparent py-2.5 outline-none"
+          />
+          {searchTerm && (
+            <button 
+              onClick={() => setSearchTerm('')}
+              className="text-[10px] font-black text-slate-400 hover:text-slate-600 px-2 py-1 rounded bg-slate-100 uppercase transition-all"
+            >
+              Limpar
+            </button>
+          )}
+        </div>
+        
         <div className="p-4 flex-1 overflow-y-auto space-y-2.5">
-          {students.length > 0 ? (
-            students.map(s => (
+          {filteredStudents.length > 0 ? (
+            filteredStudents.map((s, idx) => (
               <button 
-                key={s.id}
+                key={`${s.id}-${idx}`}
                 onClick={() => togglePresence(s.id)}
                 className={cn(
                   "w-full flex items-center justify-between p-4 rounded-2xl transition-all border-2 active:scale-[0.98]",
@@ -920,7 +945,9 @@ function PresenceModal({ session, profiles, onClose }: { session: ClassSession, 
             ))
           ) : (
             <div className="py-12 text-center">
-              <p className="text-slate-400 font-medium">Nenhum aluno cadastrado.</p>
+              <p className="text-slate-400 font-bold">
+                {students.length === 0 ? "Nenhum aluno cadastrado." : "Nenhum aluno encontrado para a pesquisa."}
+              </p>
             </div>
           )}
         </div>

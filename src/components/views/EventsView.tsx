@@ -191,9 +191,9 @@ export default function EventsView() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {events.map((event) => (
+          {events.map((event, idx) => (
             <div
-              key={event.id}
+              key={`${event.id}-${idx}`}
               className={cn(
                 "bg-white rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-slate-300 overflow-hidden flex flex-col justify-between transition-all border-l-4",
                 event.type === EventType.CAMPEONATO ? "border-l-amber-500" :
