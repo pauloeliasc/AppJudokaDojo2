@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Profile, UserRole, Payment } from '../../types';
 import { db, handleFirestoreError, OperationType, doc } from '../../lib/firebase';
 import { deleteDoc, collection, addDoc, query, where, getDocs, setDoc } from 'firebase/firestore';
-import { Plus, Search, UserPlus, Trash2, Edit2, ShieldAlert, Users, LayoutDashboard, CreditCard, CheckCircle2, XCircle, RefreshCw, AlertTriangle, UserCheck, ShieldCheck, UserX, Trash, Key, FileDown, Printer } from 'lucide-react';
+import { Plus, Search, UserPlus, Trash2, Edit2, ShieldAlert, Users, LayoutDashboard, CreditCard, CheckCircle2, XCircle, RefreshCw, AlertTriangle, UserCheck, ShieldCheck, UserX, Trash, Key, FileDown, Printer, AlertOctagon, Ban, Check } from 'lucide-react';
 import { cn, formatDate } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { profilesApi, paymentsApi } from '../../services/firestoreService';
@@ -31,7 +31,7 @@ export default function MemberManagement({ profiles, payments = [] }: { profiles
 
   const activeProfiles = profiles.filter(p => !p.status || p.status === 'active');
   const pendingProfiles = profiles.filter(p => p.status === 'pending');
-  const inactiveProfiles = profiles.filter(p => p.status === 'inactive' || p.status === 'blocked');
+  const inactiveProfiles = profiles.filter(p => p.status === 'inactive' || p.status === 'blocked' || p.status === 'suspended');
 
   const filtered = (view === 'active' ? activeProfiles : (view === 'pending' ? pendingProfiles : inactiveProfiles))
     .filter(p => (p.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()) || (p.email || '').toLowerCase().includes(searchTerm.toLowerCase()))
@@ -392,6 +392,7 @@ function MemberCard({ profile, payments, onEdit, onViewDetails, emailCounts }: {
   
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSuspending, setIsSuspending] = useState(false);
   const [isTogglingPayment, setIsTogglingPayment] = useState(false);
   const [accountStatus, setAccountStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
@@ -399,12 +400,17 @@ function MemberCard({ profile, payments, onEdit, onViewDetails, emailCounts }: {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmApprove, setConfirmApprove] = useState<UserRole | null>(null);
   const [confirmCreateAccount, setConfirmCreateAccount] = useState(false);
+  const [confirmSuspend, setConfirmSuspend] = useState(false);
+  const [confirmReactivate, setConfirmReactivate] = useState(false);
+  const [suspensionReasonChoice, setSuspensionReasonChoice] = useState('Inadimplência (Financeiro)');
+  const [customSuspensionReason, setCustomSuspensionReason] = useState('');
   const [alertMsg, setAlertMsg] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
 
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
   const currentPayment = payments.find(p => p.month === currentMonth && p.year === currentYear);
   const isPaid = currentPayment?.status === 'paid';
+  const isInactive = profile.status === 'inactive' || profile.status === 'blocked' || profile.status === 'suspended';
 
   const handleTogglePayment = async () => {
     if (!isAdminUser) return;
@@ -427,6 +433,51 @@ function MemberCard({ profile, payments, onEdit, onViewDetails, emailCounts }: {
       setAlertMsg({ text: 'Erro ao atualizar status de pagamento.', type: 'error' });
     } finally {
       setIsTogglingPayment(false);
+    }
+  };
+
+  const handleSuspendReal = async () => {
+    setIsSuspending(true);
+    try {
+      const finalReason = suspensionReasonChoice === 'Outro motivo'
+        ? (customSuspensionReason.trim() || 'Suspensão Administrativa')
+        : (customSuspensionReason.trim() ? `${suspensionReasonChoice}: ${customSuspensionReason.trim()}` : suspensionReasonChoice);
+
+      await profilesApi.update(profile.id, {
+        status: 'inactive',
+        isApproved: false,
+        suspensionReason: finalReason,
+        suspendedAt: new Date().toISOString()
+      });
+      setAlertMsg({ 
+        text: `Matrícula de ${profile.fullName} suspensa com sucesso! Ao tentar entrar no app, o aluno verá a mensagem para entrar em contato com a secretaria do Dojo.`, 
+        type: 'success' 
+      });
+    } catch (e: any) {
+      console.error(e);
+      setAlertMsg({ text: 'Erro ao suspender matrícula: ' + (e.message || 'Erro desconhecido'), type: 'error' });
+    } finally {
+      setIsSuspending(false);
+    }
+  };
+
+  const handleReactivateReal = async () => {
+    setIsSuspending(true);
+    try {
+      await profilesApi.update(profile.id, {
+        status: 'active',
+        isApproved: true,
+        suspensionReason: ''
+      });
+      setAlertMsg({ 
+        text: `Matrícula de ${profile.fullName} reativada com sucesso! O aluno já pode acessar o aplicativo normalmente.`, 
+        type: 'success' 
+      });
+    } catch (e: any) {
+      console.error(e);
+      setAlertMsg({ text: 'Erro ao reativar matrícula: ' + (e.message || 'Erro desconhecido'), type: 'error' });
+    } finally {
+      setIsSuspending(false);
     }
   };
 
@@ -510,9 +561,90 @@ function MemberCard({ profile, payments, onEdit, onViewDetails, emailCounts }: {
   return (
     <div className={cn(
       "bg-white p-6 rounded-2xl border shadow-sm hover:shadow-md transition-all group relative overflow-hidden",
-      profile.status === 'pending' ? "border-amber-200 bg-amber-50/10" : "border-slate-200"
+      profile.status === 'pending' ? "border-amber-200 bg-amber-50/10" : isInactive ? "border-rose-200 bg-rose-50/5" : "border-slate-200"
     )}>
       {/* Absolute overlay elements for confirms and messages in iFrame scope */}
+      {confirmSuspend && (
+        <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-sm flex flex-col justify-center items-center p-6 z-[60] text-center text-white overflow-y-auto">
+          <UserX className="w-10 h-10 text-amber-500 mb-3 animate-pulse" />
+          <h5 className="font-bold text-sm uppercase tracking-wider mb-1 text-white">Suspender Matrícula?</h5>
+          <p className="text-xs text-slate-300 max-w-[280px] mb-3">
+            Deseja suspender a matrícula de <strong>{profile.fullName}</strong>? O aluno ficará inativo e, ao tentar acessar o app, verá a mensagem para contatar a secretaria.
+          </p>
+
+          <div className="w-full max-w-[280px] space-y-2 mb-4 text-left">
+            <label className="text-[9px] font-black uppercase tracking-wider text-slate-300 block">Motivo da Suspensão:</label>
+            <select
+              value={suspensionReasonChoice}
+              onChange={(e) => setSuspensionReasonChoice(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs font-bold outline-none"
+            >
+              <option value="Inadimplência (Financeiro)">Inadimplência (Financeiro)</option>
+              <option value="Afastamento Temporário">Afastamento Temporário</option>
+              <option value="Solicitação do Aluno/Responsável">Solicitação do Aluno/Responsável</option>
+              <option value="Atestado Médico / Lesão">Atestado Médico / Lesão</option>
+              <option value="Outro motivo">Outro motivo</option>
+            </select>
+            <input
+              type="text"
+              placeholder="Detalhes adicionais (opcional)"
+              value={customSuspensionReason}
+              onChange={(e) => setCustomSuspensionReason(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs outline-none"
+            />
+          </div>
+
+          <div className="flex gap-2 w-full max-w-[280px]">
+            <button 
+              onClick={() => setConfirmSuspend(false)}
+              className="flex-1 bg-white/10 hover:bg-white/20 text-white rounded-xl py-2.5 text-xs font-bold cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button 
+              disabled={isSuspending}
+              onClick={async () => {
+                setConfirmSuspend(false);
+                await handleSuspendReal();
+              }}
+              className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl py-2.5 text-xs cursor-pointer flex items-center justify-center gap-1"
+            >
+              {isSuspending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
+              <span>Suspender</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirmReactivate && (
+        <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-sm flex flex-col justify-center items-center p-6 z-[60] text-center text-white">
+          <UserCheck className="w-10 h-10 text-emerald-400 mb-3 animate-bounce" />
+          <h5 className="font-bold text-sm uppercase tracking-wider mb-1 text-white">Reativar Matrícula?</h5>
+          <p className="text-xs text-slate-300 max-w-[260px] mb-4">
+            Deseja restabelecer o acesso de <strong>{profile.fullName}</strong>? O status voltará a ser Ativo e o aluno poderá utilizar o aplicativo imediatamente.
+          </p>
+          <div className="flex gap-2 w-full max-w-[240px]">
+            <button 
+              onClick={() => setConfirmReactivate(false)}
+              className="flex-1 bg-white/10 hover:bg-white/20 text-white rounded-xl py-2.5 text-xs font-bold cursor-pointer"
+            >
+              Voltar
+            </button>
+            <button 
+              disabled={isSuspending}
+              onClick={async () => {
+                setConfirmReactivate(false);
+                await handleReactivateReal();
+              }}
+              className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-xl py-2.5 text-xs cursor-pointer flex items-center justify-center gap-1"
+            >
+              {isSuspending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+              <span>Reativar</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {confirmDelete && (
         <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-sm flex flex-col justify-center items-center p-6 z-[60] text-center text-white">
           <Trash className="w-10 h-10 text-rose-500 mb-3 animate-bounce" />
@@ -619,7 +751,7 @@ function MemberCard({ profile, payments, onEdit, onViewDetails, emailCounts }: {
         <div className="flex gap-4">
           <div className={cn(
             "w-12 h-12 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm",
-            profile.status === 'pending' ? "bg-amber-100 text-amber-600" : "bg-orange-100 text-orange-600"
+            profile.status === 'pending' ? "bg-amber-100 text-amber-600" : isInactive ? "bg-rose-100 text-rose-700" : "bg-orange-100 text-orange-600"
           )}>
             {(profile.fullName || 'N N').split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()}
           </div>
@@ -638,6 +770,12 @@ function MemberCard({ profile, payments, onEdit, onViewDetails, emailCounts }: {
               </h4>
               {profile.status === 'pending' && (
                 <span className="bg-amber-100 text-amber-600 text-[8px] font-black uppercase px-1.5 py-0.5 rounded tracking-widest">Pendente</span>
+              )}
+              {isInactive && (
+                <span className="bg-rose-100 text-rose-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded tracking-widest flex items-center gap-1 border border-rose-200">
+                  <AlertOctagon className="w-2.5 h-2.5" />
+                  Matrícula Suspensa
+                </span>
               )}
             </div>
             <div className="flex flex-wrap gap-2 mt-1">
@@ -664,7 +802,33 @@ function MemberCard({ profile, payments, onEdit, onViewDetails, emailCounts }: {
             </div>
           </div>
         </div>
-        <div className="flex gap-1">
+        <div className="flex items-center gap-1">
+          {/* Quick Suspend / Reactivate Buttons for Admin */}
+          {isAdminUser && (
+            isInactive ? (
+              <button
+                onClick={() => setConfirmReactivate(true)}
+                title="Reativar Matrícula do Aluno"
+                className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+              >
+                <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="hidden sm:inline">Reativar</span>
+              </button>
+            ) : profile.status === 'active' ? (
+              <button
+                onClick={() => {
+                  setSuspensionReasonChoice('Inadimplência (Financeiro)');
+                  setCustomSuspensionReason('');
+                  setConfirmSuspend(true);
+                }}
+                title="Suspender Matrícula do Aluno (Tornar Inativo)"
+                className="p-2 hover:bg-amber-50 rounded-lg transition-colors text-slate-400 hover:text-amber-600 cursor-pointer"
+              >
+                <UserX className="w-4 h-4" />
+              </button>
+            ) : null
+          )}
+
           {profile.status === 'active' && isAdminUser && (
             <button 
               onClick={handleTogglePayment}
@@ -736,6 +900,15 @@ function MemberCard({ profile, payments, onEdit, onViewDetails, emailCounts }: {
         </div>
       ) : (
         <div className="mt-6 grid grid-cols-2 gap-4">
+          {profile.suspensionReason && isInactive && (
+            <div className="col-span-2 p-3 bg-rose-50/70 rounded-xl border border-rose-200/70 flex items-start gap-2.5">
+              <AlertOctagon className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-wider text-rose-700">Motivo da Suspensão / Inativação</p>
+                <p className="text-xs text-rose-950 font-bold leading-tight mt-0.5">{profile.suspensionReason}</p>
+              </div>
+            </div>
+          )}
           <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-ellipsis overflow-hidden">
             <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">E-mail de Login</p>
             <p className="text-xs font-bold text-slate-700 truncate">{profile.email || 'Não cadastrado'}</p>
@@ -791,9 +964,13 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
     conditions: profile?.conditions || '',
     role: profile?.role || UserRole.STUDENT,
     responsibleId: profile?.responsibleId || '',
+    responsibleName: (profile as any)?.responsibleName || '',
+    responsiblePhone: (profile as any)?.responsiblePhone || '',
+    responsibleEmail: (profile as any)?.responsibleEmail || '',
     points: profile?.points || 0,
     isApproved: profile?.isApproved !== undefined ? profile.isApproved : true,
     status: profile?.status || 'active',
+    suspensionReason: profile?.suspensionReason || '',
     callNumber: profile?.callNumber || '',
     isStudent: profile?.isStudent || false,
     phoneNumber: profile?.phoneNumber || '',
@@ -1287,43 +1464,61 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
             )}
 
             {isAdminUser && (
-               <div>
-                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Função</label>
-                 <select 
-                   className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium appearance-none"
-                   value={formData.role}
-                   onChange={e => setFormData({...formData, role: e.target.value as UserRole})}
-                 >
-                   <option value={UserRole.STUDENT}>Aluno</option>
-                   <option value={UserRole.PROFESSOR}>Professor</option>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Função</label>
+                <select 
+                  className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium appearance-none"
+                  value={formData.role}
+                  onChange={e => setFormData({...formData, role: e.target.value as UserRole})}
+                >
+                  <option value={UserRole.STUDENT}>Aluno</option>
+                  <option value={UserRole.PROFESSOR}>Professor</option>
+                  <option value={UserRole.ADMIN}>Administrador</option>
+                </select>
+              </div>
+            )}
 
-                   <option value={UserRole.ADMIN}>Administrador</option>
-                 </select>
-               </div>
-             )}
- 
-             {isAdminUser && (
-               <div>
-                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Situação (Status)</label>
-                 <select 
-                   className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium appearance-none"
-                   value={formData.status}
-                   onChange={e => {
-                     const statusVal = e.target.value as any;
-                     setFormData({
-                       ...formData, 
-                       status: statusVal, 
-                       isApproved: statusVal === 'active' || statusVal === 'inactive' || statusVal === 'blocked'
-                     });
-                   }}
-                 >
-                   <option value="active">Ativo (Active)</option>
-                   <option value="inactive">Inativo (Inactive)</option>
-                   <option value="pending">Pendente (Pending)</option>
-                   <option value="blocked">Bloqueado (Blocked)</option>
-                  </select>
-                </div>
-              )}
+            {isAdminUser && (
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Situação da Matrícula (Status)</label>
+                <select 
+                  className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium appearance-none"
+                  value={formData.status}
+                  onChange={e => {
+                    const statusVal = e.target.value as any;
+                    setFormData({
+                      ...formData, 
+                      status: statusVal, 
+                      isApproved: statusVal === 'active',
+                      suspensionReason: statusVal === 'active' ? '' : (formData.suspensionReason || 'Inadimplência')
+                    });
+                  }}
+                >
+                  <option value="active">Ativo (Active)</option>
+                  <option value="inactive">Matrícula Suspensa / Inativo</option>
+                  <option value="pending">Pendente (Pending)</option>
+                  <option value="blocked">Bloqueado (Blocked)</option>
+                </select>
+              </div>
+            )}
+
+            {isAdminUser && (formData.status === 'inactive' || formData.status === 'blocked' || formData.status === 'suspended') && (
+              <div className="md:col-span-2 p-4 bg-rose-50 border border-rose-200 rounded-2xl space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-wider text-rose-700 block">
+                  Motivo da Suspensão / Inativação (Exibido para o Aluno)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Inadimplência, Afastamento Médico, Solicitação do Aluno..."
+                  className="w-full bg-white border border-rose-200 focus:border-rose-500 rounded-xl py-2.5 px-3.5 outline-none text-sm font-semibold text-rose-950"
+                  value={formData.suspensionReason}
+                  onChange={e => setFormData({ ...formData, suspensionReason: e.target.value })}
+                />
+                <p className="text-[11px] text-rose-600 font-medium">
+                  Ao tentar acessar o aplicativo, o aluno verá o aviso de matrícula suspensa e a mensagem: "Favor entrar em contato com a secretária do Dojo".
+                </p>
+              </div>
+            )}
 
             {formData.role === UserRole.STUDENT && (
               <div className="md:col-span-2 p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">

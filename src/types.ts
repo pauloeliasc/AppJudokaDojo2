@@ -12,7 +12,7 @@ export interface User {
   role: UserRole;
   username: string;
   isApproved: boolean;
-  status: 'active' | 'pending' | 'blocked' | 'inactive';
+  status: 'active' | 'pending' | 'blocked' | 'inactive' | 'suspended';
 }
 
 export interface Profile {
@@ -35,7 +35,9 @@ export interface Profile {
   role: UserRole;
   userId?: string; 
   isApproved: boolean;
-  status: 'active' | 'pending' | 'blocked' | 'inactive';
+  status: 'active' | 'pending' | 'blocked' | 'inactive' | 'suspended';
+  suspensionReason?: string;
+  suspendedAt?: string;
   responsibleName?: string; // Name of a parent or guardian
   responsiblePhone?: string; // Phone number of the parent/guardian
   responsibleEmail?: string; // Email of the parent/guardian

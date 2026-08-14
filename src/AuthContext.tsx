@@ -12,6 +12,7 @@ interface AuthContextType {
   activeProfileId: string | null;
   setActiveProfileId: (id: string) => void;
   availableProfiles: Profile[];
+  activeProfile: Profile | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -21,6 +22,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [activeProfileId, setActiveProfileIdState] = useState<string | null>(null);
   const [availableProfiles, setAvailableProfiles] = useState<Profile[]>([]);
+  const [activeProfile, setActiveProfile] = useState<Profile | null>(null);
 
   // Function to switch active profile
   const setActiveProfileId = (id: string) => {
@@ -47,6 +49,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (!firebaseUser) {
         setUser(null);
+        setActiveProfile(null);
         setAvailableProfiles([]);
         setActiveProfileIdState(null);
         setLoading(false);
@@ -127,6 +130,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         const isProfileAdmin = pData.role === UserRole.ADMIN || isAdminEmail;
+        const currentProf = { id: activeProfileId, ...pData } as Profile;
+        setActiveProfile(currentProf);
 
         setUser({
           uid: firebaseUser.uid,
@@ -139,6 +144,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           status: isProfileAdmin ? 'active' : (pData.status ?? 'pending')
         });
       } else {
+        setActiveProfile(null);
         // Create matching fallback profile if it doesn't exist yet
         const newUser: User = {
           uid: firebaseUser.uid,
@@ -193,7 +199,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, logout, refreshUser, activeProfileId, setActiveProfileId, availableProfiles }}>
+    <AuthContext.Provider value={{ user, loading, logout, refreshUser, activeProfileId, setActiveProfileId, availableProfiles, activeProfile }}>
       {children}
     </AuthContext.Provider>
   );
