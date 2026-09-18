@@ -1,6 +1,6 @@
 import React from 'react';
 import { UserRole } from '../types';
-import { Home, Users, Calendar, Wallet, Trophy, UserCircle, LogOut, GraduationCap, FileText, Clock, Megaphone } from 'lucide-react';
+import { Home, Users, Calendar, Wallet, Trophy, UserCircle, LogOut, GraduationCap, FileText, Clock, Megaphone, Settings } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface SidebarProps {
@@ -13,18 +13,18 @@ interface SidebarProps {
 
 export default function Sidebar({ role, activeTab, setActiveTab, logout, userName }: SidebarProps) {
   const items = [
-    { id: 'home', icon: Home, label: 'Início', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT] },
-    { id: 'events', icon: Megaphone, label: 'Mural de Eventos', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT] },
-    { id: 'members', icon: Users, label: 'Alunos', roles: [UserRole.ADMIN, UserRole.PROFESSOR] },
+    { id: 'home', icon: Home, label: 'Início', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.ASSISTANT, UserRole.STUDENT] },
+    { id: 'events', icon: Megaphone, label: 'Mural de Eventos', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.ASSISTANT, UserRole.STUDENT] },
+    { id: 'members', icon: Users, label: 'Alunos', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.ASSISTANT] },
     { id: 'family', icon: Users, label: 'Minha Família', roles: [UserRole.STUDENT] },
     { id: 'finance', icon: Wallet, label: 'Financeiro', roles: [UserRole.ADMIN] },
-    { id: 'classes', icon: Calendar, label: 'Agenda', roles: [UserRole.ADMIN, UserRole.PROFESSOR] },
+    { id: 'classes', icon: Calendar, label: 'Agenda', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.ASSISTANT] },
     { id: 'reports', icon: FileText, label: 'Relatórios', roles: [UserRole.ADMIN, UserRole.PROFESSOR] },
-    { id: 'profile', icon: UserCircle, label: 'Dados Pessoais', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT] },
-    { id: 'history', icon: Clock, label: 'Histórico', roles: [UserRole.STUDENT] },
-    { id: 'graduation', icon: GraduationCap, label: 'Exame de Faixa', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT] },
-    { id: 'ranking', icon: Trophy, label: 'Conquistas', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.STUDENT] },
-    { id: 'settings', icon: UserCircle, label: 'Configurações', roles: [UserRole.ADMIN] },
+    { id: 'profile', icon: UserCircle, label: 'Dados Pessoais', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.ASSISTANT, UserRole.STUDENT] },
+    { id: 'history', icon: Clock, label: 'Histórico', roles: [UserRole.ASSISTANT, UserRole.STUDENT] },
+    { id: 'graduation', icon: GraduationCap, label: 'Exame de Faixa', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.ASSISTANT, UserRole.STUDENT] },
+    { id: 'ranking', icon: Trophy, label: 'Conquistas', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.ASSISTANT, UserRole.STUDENT] },
+    { id: 'settings', icon: Settings, label: 'Configurações', roles: [UserRole.ADMIN] },
   ];
 
   const filteredItems = items.filter(item => item.roles.includes(role));
@@ -73,7 +73,9 @@ export default function Sidebar({ role, activeTab, setActiveTab, logout, userNam
             </div>
             <div className="flex flex-col hidden lg:flex overflow-hidden">
               <span className="font-bold text-xs lg:text-sm text-white truncate">{userName}</span>
-              <span className="text-[8px] lg:text-[10px] uppercase tracking-widest font-bold text-slate-500 truncate">{role}</span>
+              <span className="text-[8px] lg:text-[10px] uppercase tracking-widest font-bold text-slate-400 truncate">
+                {role === UserRole.ADMIN ? 'Administrador' : role === UserRole.PROFESSOR ? 'Professor' : role === UserRole.ASSISTANT ? '🥋 Ajudante' : 'Aluno'}
+              </span>
             </div>
           </div>
           <button 

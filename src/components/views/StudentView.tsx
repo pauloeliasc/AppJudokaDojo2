@@ -31,15 +31,15 @@ export default function StudentView({ activeTab, setActiveTab, forcedProfile }: 
     if (!profileId || profileId === 'undefined') return;
 
     const unsubProfile = onSnapshot(doc(db, 'profiles', profileId), (doc) => {
-      if (doc.exists()) setProfile({ id: doc.id, ...doc.data() } as Profile);
+      if (doc.exists()) setProfile({ ...doc.data(), id: doc.id } as Profile);
     });
 
     const unsubClasses = onSnapshot(collection(db, 'classes'), (snapshot) => {
-      setClasses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ClassSession)));
+      setClasses(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ClassSession)));
     });
 
     const unsubPayments = onSnapshot(query(collection(db, 'payments'), where('memberId', '==', profileId)), (snapshot) => {
-      setPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment)));
+      setPayments(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Payment)));
     });
 
     const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
@@ -47,18 +47,27 @@ export default function StudentView({ activeTab, setActiveTab, forcedProfile }: 
     });
 
     const unsubSchedules = onSnapshot(collection(db, 'schedule'), (snapshot) => {
-      setSchedules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Schedule)));
+      setSchedules(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Schedule)));
     });
 
     const unsubAllProfiles = onSnapshot(collection(db, 'profiles'), (snapshot) => {
-      setAllProfiles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Profile)).filter(p => !p.isPointer));
+      const seen = new Set<string>();
+      const list: Profile[] = [];
+      for (const doc of snapshot.docs) {
+        const item = { ...doc.data(), id: doc.id } as Profile;
+        if (!item.isPointer && !seen.has(item.id)) {
+          seen.add(item.id);
+          list.push(item);
+        }
+      }
+      setAllProfiles(list);
     });
 
     // Fetch user presences
     const unsubPresences = onSnapshot(
       query(collectionGroup(db, 'presences'), where('memberId', '==', profileId)),
       (snapshot) => {
-        const list = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Presence));
+        const list = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Presence));
         // Sort on client side to avoid index requirement
         list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         setUserPresenceList(list);
@@ -363,7 +372,7 @@ function StudentHome({ profile, classes, payments, schedules, presences, allProf
   );
 }
 
-function FullPresenceHistory({ presences, classes }: { presences: Presence[], classes: ClassSession[] }) {
+export function FullPresenceHistory({ presences, classes }: { presences: Presence[], classes: ClassSession[] }) {
   const [filterType, setFilterType] = useState<string>('all');
   
   const filtered = presences

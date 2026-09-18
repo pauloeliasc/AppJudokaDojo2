@@ -38,6 +38,14 @@ service cloud.firestore {
       );
     }
 
+    function isAssistant() {
+      return isSignedIn() && (
+        isProfessor() ||
+        (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('role', '') == 'assistant')
+      );
+    }
+
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
@@ -81,13 +89,13 @@ service cloud.firestore {
 
     function isValidUser(data) {
       return data.keys().hasAll(['role']) &&
-             data.role in ['admin', 'professor', 'student'];
+             data.role in ['admin', 'professor', 'assistant', 'student'];
     }
 
     function isValidProfile(data) {
       return data.keys().hasAll(['fullName', 'role']) &&
              data.fullName is string && data.fullName.size() <= 200 &&
-             data.role in ['admin', 'professor', 'student'];
+             data.role in ['admin', 'professor', 'assistant', 'student'];
     }
 
     function isValidClass(data) {
@@ -154,7 +162,7 @@ service cloud.firestore {
     match /profiles/{profileId} {
       allow get: if isSignedIn();
       allow list: if isSignedIn();
-      allow create, update: if isSignedIn() && (isMyProfile(profileId) || isProfessor() || (request.auth.token.email != null && incoming().get('email', '') == request.auth.token.email));
+      allow create, update: if isSignedIn() && (isMyProfile(profileId) || isProfessor() || isAssistant() || (request.auth.token.email != null && incoming().get('email', '') == request.auth.token.email));
       allow delete: if isAdmin();
     }
 
@@ -168,8 +176,8 @@ service cloud.firestore {
     match /{path=**}/presences/{presenceId} {
       allow list: if isSignedIn();
       allow get: if isSignedIn();
-      allow create, update: if (isProfessor() || isMyProfile(incoming().memberId)) && isValidPresence(incoming());
-      allow delete: if isProfessor() || isMyProfile(presenceId) || (resource != null && isMyProfile(resource.data.get('memberId', '')));
+      allow create, update: if (isProfessor() || isAssistant() || isMyProfile(incoming().memberId)) && isValidPresence(incoming());
+      allow delete: if isProfessor() || isAssistant() || isMyProfile(presenceId) || (resource != null && isMyProfile(resource.data.get('memberId', '')));
     }
 
     match /payments/{paymentId} {

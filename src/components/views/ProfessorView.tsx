@@ -30,31 +30,38 @@ export default function ProfessorView({ activeTab, setActiveTab }: { activeTab: 
     if (!profileId || profileId === 'undefined') return;
 
     const unsubProfile = onSnapshot(doc(db, 'profiles', profileId), (doc) => {
-      if (doc.exists()) setProfile({ id: doc.id, ...doc.data() } as Profile);
+      if (doc.exists()) setProfile({ ...doc.data(), id: doc.id } as Profile);
     });
 
     const unsubProfiles = onSnapshot(collection(db, 'profiles'), (snapshot) => {
-      setProfiles(snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as Profile))
-        .filter(p => !p.isPointer));
+      const seen = new Set<string>();
+      const list: Profile[] = [];
+      for (const doc of snapshot.docs) {
+        const item = { ...doc.data(), id: doc.id } as Profile;
+        if (!item.isPointer && !seen.has(item.id)) {
+          seen.add(item.id);
+          list.push(item);
+        }
+      }
+      setProfiles(list);
     });
 
     const unsubPayments = onSnapshot(collection(db, 'payments'), (snapshot) => {
-      setPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment)));
+      setPayments(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Payment)));
     });
 
     const unsubClasses = onSnapshot(collection(db, 'classes'), (snapshot) => {
-      setClasses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ClassSession)));
+      setClasses(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ClassSession)));
     });
 
     const unsubSchedules = onSnapshot(collection(db, 'schedule'), (snapshot) => {
-      setSchedules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Schedule)));
+      setSchedules(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Schedule)));
     });
 
     const unsubPresences = onSnapshot(
       collectionGroup(db, 'presences'),
       (snapshot) => {
-        const list = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Presence));
+        const list = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Presence));
         list.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
         setAllPresences(list);
       }

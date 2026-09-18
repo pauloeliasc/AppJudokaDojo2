@@ -653,7 +653,7 @@ export default function MemberDetailsModal({ profile, onClose }: MemberDetailsMo
                           presences.slice(0, 10).map((p, idx) => {
                             const session = allClasses.find(c => c.id === p.classId);
                             return (
-                              <tr key={`${p.id}-${p.classId || idx}`} className="hover:bg-slate-50 transition-colors">
+                              <tr key={`${p.id}-${p.classId || idx}-${idx}`} className="hover:bg-slate-50 transition-colors">
                                 <td className="px-6 py-4 text-xs font-bold text-slate-700">
                                   {new Date(p.timestamp).toLocaleDateString('pt-BR')}
                                 </td>

@@ -21,7 +21,7 @@ export const scheduleApi = {
     const path = 'schedule';
     try {
       const querySnapshot = await getDocs(collection(db, path));
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Schedule));
+      return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Schedule));
     } catch (e) {
       handleFirestoreError(e, OperationType.LIST, path);
       return [];
@@ -68,7 +68,7 @@ export const profilesApi = {
       const docRef = doc(db, 'profiles', id);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() } as Profile;
+        return { ...docSnap.data(), id: docSnap.id } as Profile;
       }
       return null;
     } catch (e) {
@@ -81,7 +81,7 @@ export const profilesApi = {
     const path = 'profiles';
     try {
       const querySnapshot = await getDocs(collection(db, path));
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Profile));
+      return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Profile));
     } catch (e) {
       handleFirestoreError(e, OperationType.LIST, path);
       return [];
@@ -129,7 +129,7 @@ export const classesApi = {
     try {
       const q = query(collection(db, path), orderBy('date', 'desc'));
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ClassSession));
+      return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ClassSession));
     } catch (e) {
       handleFirestoreError(e, OperationType.LIST, path);
       return [];
@@ -162,7 +162,7 @@ export const presencesApi = {
     const path = `classes/${classId}/presences`;
     try {
       const querySnapshot = await getDocs(collection(db, path));
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Presence));
+      return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Presence));
     } catch (e) {
       handleFirestoreError(e, OperationType.LIST, path);
       return [];
@@ -181,7 +181,7 @@ export const presencesApi = {
   getAllGlobal: async (): Promise<Presence[]> => {
     try {
       const querySnapshot = await getDocs(collectionGroup(db, 'presences'));
-      const list = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Presence));
+      const list = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Presence));
       list.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
       return list;
     } catch (e) {
@@ -194,7 +194,7 @@ export const presencesApi = {
     try {
       const q = query(collectionGroup(db, 'presences'), where('memberId', '==', memberId));
       const querySnapshot = await getDocs(q);
-      const list = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Presence));
+      const list = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Presence));
       list.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
       return list;
     } catch (e) {
@@ -210,7 +210,7 @@ export const paymentsApi = {
     try {
       const q = query(collection(db, path), where('memberId', '==', userId), orderBy('year', 'desc'), orderBy('month', 'desc'));
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
+      return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Payment));
     } catch (e) {
       handleFirestoreError(e, OperationType.LIST, path);
       return [];
@@ -221,7 +221,7 @@ export const paymentsApi = {
     const path = 'payments';
     try {
       const querySnapshot = await getDocs(collection(db, path));
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
+      return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Payment));
     } catch (e) {
       handleFirestoreError(e, OperationType.LIST, path);
       return [];
@@ -283,7 +283,7 @@ export const eventsApi = {
     try {
       const q = query(collection(db, path), orderBy('date', 'asc'));
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EventItem));
+      return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as EventItem));
     } catch (e) {
       console.error("Error fetching events:", e);
       return [];

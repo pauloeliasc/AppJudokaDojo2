@@ -8,7 +8,7 @@
         "uid": { "type": "string" },
         "email": { "type": "string" },
         "name": { "type": "string" },
-        "role": { "type": "string", "enum": ["admin", "professor", "student"] },
+        "role": { "type": "string", "enum": ["admin", "professor", "assistant", "student"] },
         "username": { "type": "string" }
       },
       "required": ["uid", "role", "username"]

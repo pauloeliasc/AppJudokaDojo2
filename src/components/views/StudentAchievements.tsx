@@ -26,29 +26,38 @@ export default function StudentAchievements({ profileId: forcedProfileId }: { pr
     }
     
     const unsubProfile = onSnapshot(doc(db, 'profiles', profileId), (doc) => {
-      if (doc.exists()) setProfile({ id: doc.id, ...doc.data() } as Profile);
+      if (doc.exists()) setProfile({ ...doc.data(), id: doc.id } as Profile);
     });
 
     const unsubMemberPresences = onSnapshot(
       query(collectionGroup(db, 'presences'), where('memberId', '==', profileId)),
       (snapshot) => {
-        setMemberPresences(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Presence)));
+        setMemberPresences(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Presence)));
       }
     );
 
     const unsubAllPresences = onSnapshot(collectionGroup(db, 'presences'), (snapshot) => {
-      setAllPresences(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Presence)));
+      setAllPresences(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Presence)));
     });
 
     const unsubPayments = onSnapshot(
       query(collection(db, 'payments'), where('memberId', '==', profileId)),
       (snapshot) => {
-        setMemberPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment)));
+        setMemberPayments(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Payment)));
       }
     );
 
     const unsubProfiles = onSnapshot(collection(db, 'profiles'), (snapshot) => {
-      setAllProfiles(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Profile)));
+      const seen = new Set<string>();
+      const list: Profile[] = [];
+      for (const d of snapshot.docs) {
+        const item = { ...d.data(), id: d.id } as Profile;
+        if (!item.isPointer && !seen.has(item.id)) {
+          seen.add(item.id);
+          list.push(item);
+        }
+      }
+      setAllProfiles(list);
     });
 
     setLoading(false);
@@ -262,14 +271,14 @@ export default function StudentAchievements({ profileId: forcedProfileId }: { pr
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {potentialBadges.map((badge) => {
+        {potentialBadges.map((badge, idx) => {
           const { status, progress, message } = badge.check();
           const Icon = getBadgeIcon(badge.icon);
           const isEarned = status === 'earned';
 
           return (
             <div 
-              key={badge.id}
+              key={`${badge.id}-${idx}`}
               className={cn(
                 "p-6 rounded-3xl border transition-all relative overflow-hidden group",
                 isEarned 

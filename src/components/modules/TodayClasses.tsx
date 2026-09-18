@@ -32,6 +32,8 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
   const [panelPresences, setPanelPresences] = useState<Presence[]>([]);
 
   const isAdminOrProfessor = profile?.role === UserRole.ADMIN || profile?.role === UserRole.PROFESSOR;
+  const isAssistant = profile?.role === UserRole.ASSISTANT;
+  const canManageAttendance = isAdminOrProfessor || isAssistant;
 
   // Subscribe in real-time to check-ins matching target date and target physical classes
   useEffect(() => {
@@ -120,9 +122,16 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
   // Fetch all profiles for mapping names in check-in panel
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'profiles'), (snapshot) => {
-      setAllProfiles(snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as Profile))
-        .filter(p => !p.isPointer));
+      const seen = new Set<string>();
+      const list: Profile[] = [];
+      for (const doc of snapshot.docs) {
+        const item = { ...doc.data(), id: doc.id } as Profile;
+        if (!item.isPointer && !seen.has(item.id)) {
+          seen.add(item.id);
+          list.push(item);
+        }
+      }
+      setAllProfiles(list);
     });
     return unsub;
   }, []);
@@ -575,7 +584,7 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
                   <div className="mt-2 flex items-center gap-1.5">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     <span className="text-[10px] font-bold text-slate-500 tracking-tight">
-                      {isAdminOrProfessor 
+                      {canManageAttendance 
                         ? `${presenceCounts[classSession.id] || 0} ${(presenceCounts[classSession.id] || 0) === 1 ? 'aluno presente' : 'alunos presentes'}`
                         : hasCheckedIn ? 'Você está presente' : 'Você não realizou check-in'
                       }
@@ -583,14 +592,14 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
                   </div>
                 )}
 
-                {!isClassCanceled && classSession && (isAdminOrProfessor ? classPresences.length > 0 : hasCheckedIn) && (
+                {!isClassCanceled && classSession && (canManageAttendance ? classPresences.length > 0 : hasCheckedIn) && (
                   <div className="mt-4 pt-3 border-t border-slate-200/50">
                     <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-                      <span>{isAdminOrProfessor ? `No treino agora (${classPresences.length})` : 'Seu check-in'}</span>
+                      <span>{canManageAttendance ? `No treino agora (${classPresences.length})` : 'Seu check-in'}</span>
                     </div>
                     <div className="flex flex-wrap gap-1.5 max-h-[72px] overflow-y-auto pr-1">
                       {classPresences
-                        .filter(p => isAdminOrProfessor || (profile && p.memberId === profile.id))
+                        .filter(p => canManageAttendance || (profile && p.memberId === profile.id))
                         .map((p, pIdx) => {
                           const studentProfile = allProfiles.find(prof => prof.id === p.memberId);
                           const isMe = profile && p.memberId === profile.id;
@@ -655,7 +664,7 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
                 )
               ) : (
                 <>
-                  {isAdminOrProfessor ? (
+                  {canManageAttendance ? (
                     <div className="mt-6 space-y-2">
                       <button
                         disabled={loadingChamadaId === id}
@@ -796,7 +805,7 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
         })}
       </div>
 
-      {isAdminOrProfessor && (
+      {canManageAttendance && (
         <div className="mt-12 border-t border-slate-100 pt-10">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8">
             <div className="flex items-center gap-3">
@@ -1039,7 +1048,7 @@ function ChamadaModal({ session, profiles, onClose }: { session: ClassSession, p
   const [searchTerm, setSearchTerm] = useState('');
 
   const students = profiles
-    .filter(p => !p.role || p.role === UserRole.STUDENT)
+    .filter(p => !p.role || p.role === UserRole.STUDENT || p.role === UserRole.ASSISTANT)
     .sort((a, b) => {
       const parseNum = (val?: string | number) => {
         if (val === undefined || val === null || val === '') return Infinity;

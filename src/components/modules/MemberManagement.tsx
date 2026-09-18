@@ -19,14 +19,16 @@ export default function MemberManagement({ profiles, payments = [] }: { profiles
     }
   });
   const isAdminUser = currentUser?.role === UserRole.ADMIN;
+  const isAssistantUser = currentUser?.role === UserRole.ASSISTANT;
   const isAdminOrProfessor = isAdminUser || currentUser?.role === UserRole.PROFESSOR;
+  const canAddStudent = isAdminUser || currentUser?.role === UserRole.PROFESSOR || isAssistantUser;
 
   const [isAdding, setIsAdding] = useState(false);
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const [viewingDetails, setViewingDetails] = useState<Profile | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [view, setView] = useState<'active' | 'pending' | 'inactive'>('active');
-  const [roleFilter, setRoleFilter] = useState<'all' | 'student' | 'professor' | 'admin'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'student' | 'assistant' | 'professor' | 'admin'>('all');
   const [showSyncModal, setShowSyncModal] = useState(false);
 
   const activeProfiles = profiles.filter(p => !p.status || p.status === 'active');
@@ -38,6 +40,7 @@ export default function MemberManagement({ profiles, payments = [] }: { profiles
     .filter(p => {
       if (roleFilter === 'all') return true;
       if (roleFilter === 'student') return !p.role || p.role === UserRole.STUDENT;
+      if (roleFilter === 'assistant') return p.role === UserRole.ASSISTANT;
       if (roleFilter === 'professor') return p.role === UserRole.PROFESSOR;
       if (roleFilter === 'admin') return p.role === UserRole.ADMIN;
       return true;
@@ -48,7 +51,7 @@ export default function MemberManagement({ profiles, payments = [] }: { profiles
     const rows = filtered.map(p => [
       p.fullName || '',
       p.email || '',
-      p.role === 'admin' ? 'Administrador' : p.role === 'professor' ? 'Professor' : 'Aluno',
+      p.role === 'admin' ? 'Administrador' : p.role === 'professor' ? 'Professor' : p.role === 'assistant' ? 'Ajudante' : 'Aluno',
       p.currentGrade || 'Branca',
       p.status || 'Ativo',
       p.birthDate || '',
@@ -277,6 +280,7 @@ export default function MemberManagement({ profiles, payments = [] }: { profiles
           {[
             { id: 'all', label: 'Todos os Membros' },
             { id: 'student', label: 'Alunos' },
+            { id: 'assistant', label: 'Ajudantes' },
             { id: 'professor', label: 'Professores' },
             { id: 'admin', label: 'Administradores' }
           ].map(roleItem => {
@@ -286,6 +290,7 @@ export default function MemberManagement({ profiles, payments = [] }: { profiles
             
             if (roleItem.id === 'all') count = filteredBySearch.length;
             else if (roleItem.id === 'student') count = filteredBySearch.filter(p => !p.role || p.role === UserRole.STUDENT).length;
+            else if (roleItem.id === 'assistant') count = filteredBySearch.filter(p => p.role === UserRole.ASSISTANT).length;
             else if (roleItem.id === 'professor') count = filteredBySearch.filter(p => p.role === UserRole.PROFESSOR).length;
             else if (roleItem.id === 'admin') count = filteredBySearch.filter(p => p.role === UserRole.ADMIN).length;
 
@@ -704,7 +709,7 @@ function MemberCard({ profile, payments, onEdit, onViewDetails, emailCounts }: {
           <CheckCircle2 className="w-10 h-10 text-indigo-400 mb-3" />
           <h5 className="font-bold text-sm uppercase tracking-wider mb-1 text-white">Aprovar Cadastro?</h5>
           <p className="text-xs text-slate-300 max-w-[240px] mb-4">
-            Confirmar aprovação de <strong>{profile.fullName}</strong> para perfil ativo de {confirmApprove === UserRole.STUDENT ? 'Aluno' : 'Professor'}?
+            Confirmar aprovação de <strong>{profile.fullName}</strong> para perfil ativo de {confirmApprove === UserRole.STUDENT ? 'Aluno' : confirmApprove === UserRole.ASSISTANT ? 'Ajudante' : 'Professor'}?
           </p>
           <div className="flex gap-2 w-full max-w-[220px]">
             <button 
@@ -789,8 +794,16 @@ function MemberCard({ profile, payments, onEdit, onViewDetails, emailCounts }: {
                   Responsável/Família ({emailCounts[profile.email.trim().toLowerCase()]} Alunos)
                 </span>
               ) : (
-                <span className="text-[10px] uppercase font-bold tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200">
-                  {profile.role || 'student'}
+                <span className={cn(
+                  "text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border",
+                  profile.role === UserRole.ADMIN ? "bg-purple-50 text-purple-700 border-purple-200 font-black" :
+                  profile.role === UserRole.PROFESSOR ? "bg-blue-50 text-blue-700 border-blue-200 font-bold" :
+                  profile.role === UserRole.ASSISTANT ? "bg-amber-50 text-amber-900 border-amber-300 font-black flex items-center gap-1" :
+                  "bg-slate-100 text-slate-600 border-slate-200"
+                )}>
+                  {profile.role === UserRole.ADMIN ? 'Administrador' :
+                   profile.role === UserRole.PROFESSOR ? 'Professor' :
+                   profile.role === UserRole.ASSISTANT ? '🥋 Ajudante' : 'Aluno'}
                 </span>
               )}
               {profile.userId && profile.status === 'active' && (
@@ -884,16 +897,22 @@ function MemberCard({ profile, payments, onEdit, onViewDetails, emailCounts }: {
       </div>
 
       {profile.status === 'pending' ? (
-        <div className="mt-6 flex gap-3">
+        <div className="mt-6 flex gap-2 flex-wrap sm:flex-nowrap">
           <button 
             onClick={() => setConfirmApprove(UserRole.STUDENT)}
-            className="flex-1 bg-emerald-500 text-white py-2 rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-colors shadow-sm cursor-pointer"
+            className="flex-1 bg-emerald-500 text-white py-2 rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-colors shadow-sm cursor-pointer text-center"
           >
             Aprovar Aluno
           </button>
           <button 
+            onClick={() => setConfirmApprove(UserRole.ASSISTANT)}
+            className="flex-1 bg-amber-500 text-slate-950 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-amber-600 transition-colors shadow-sm cursor-pointer text-center"
+          >
+            Aprovar Ajudante
+          </button>
+          <button 
             onClick={() => setConfirmApprove(UserRole.PROFESSOR)}
-            className="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition-colors shadow-sm cursor-pointer"
+            className="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition-colors shadow-sm cursor-pointer text-center"
           >
             Aprovar Prof
           </button>
@@ -1436,7 +1455,7 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
               />
             </div>
 
-            {formData.role === UserRole.STUDENT && (
+            {(formData.role === UserRole.STUDENT || formData.role === UserRole.ASSISTANT) && (
               <>
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Última Graduação</label>
@@ -1463,20 +1482,34 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
               </>
             )}
 
-            {isAdminUser && (
+            {isAdminUser ? (
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Função</label>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Função / Perfil</label>
                 <select 
                   className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium appearance-none"
                   value={formData.role}
                   onChange={e => setFormData({...formData, role: e.target.value as UserRole})}
                 >
                   <option value={UserRole.STUDENT}>Aluno</option>
+                  <option value={UserRole.ASSISTANT}>🥋 Ajudante (Adiciona alunos e confirma presença)</option>
                   <option value={UserRole.PROFESSOR}>Professor</option>
                   <option value={UserRole.ADMIN}>Administrador</option>
                 </select>
+                {formData.role === UserRole.ASSISTANT && (
+                  <p className="text-[11px] text-amber-800 bg-amber-50 p-2.5 rounded-lg mt-1 font-medium border border-amber-200">
+                    O Ajudante pode adicionar novos alunos no sistema e confirmar ou registrar a presença de outros alunos nas aulas.
+                  </p>
+                )}
               </div>
-            )}
+            ) : currentUser?.role === UserRole.ASSISTANT ? (
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Função / Perfil</label>
+                <div className="w-full bg-slate-100 border border-slate-200 rounded-xl py-3.5 px-4 text-sm text-slate-700 font-semibold flex items-center justify-between">
+                  <span>Aluno</span>
+                  <span className="text-[10px] text-slate-500 font-medium bg-white px-2 py-0.5 rounded border border-slate-200">Adicionado por Ajudante</span>
+                </div>
+              </div>
+            ) : null}
 
             {isAdminUser && (
               <div>
@@ -1520,7 +1553,7 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
               </div>
             )}
 
-            {formData.role === UserRole.STUDENT && (
+            {(formData.role === UserRole.STUDENT || formData.role === UserRole.ASSISTANT) && (
               <div className="md:col-span-2 p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
                 <h4 className="font-bold text-sm text-slate-800 uppercase tracking-wider">Informações do Responsável (Opcional)</h4>
                 
@@ -1559,7 +1592,7 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
               </div>
             )}
 
-            {formData.role === UserRole.STUDENT && isAdminUser && (
+            {(formData.role === UserRole.STUDENT || formData.role === UserRole.ASSISTANT) && isAdminUser && (
               <div className="md:col-span-2">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Número de Chamada (Opcional - Anotações Pessoais)</label>
                 <input 

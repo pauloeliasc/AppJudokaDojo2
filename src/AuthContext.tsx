@@ -63,9 +63,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Set up real-time listener for ALL profiles with this email (family members)
       const q = query(collection(db, 'profiles'), where('email', '==', email));
       unsubscribeFamily = onSnapshot(q, async (snapshot) => {
-        const list = snapshot.docs
-          .map(d => ({ id: d.id, ...d.data() } as Profile))
-          .filter(p => !p.isPointer);
+        const seen = new Set<string>();
+        const list: Profile[] = [];
+        for (const d of snapshot.docs) {
+          const item = { ...d.data(), id: d.id } as Profile;
+          if (!item.isPointer && !seen.has(item.id)) {
+            seen.add(item.id);
+            list.push(item);
+          }
+        }
 
         setAvailableProfiles(list);
 

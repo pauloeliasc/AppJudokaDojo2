@@ -806,7 +806,7 @@ function PresenceModal({ session, profiles, onClose }: { session: ClassSession, 
   const [presences, setPresences] = useState<Record<string, boolean>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const students = profiles
-    .filter(p => !p.role || p.role === UserRole.STUDENT)
+    .filter(p => !p.role || p.role === UserRole.STUDENT || p.role === UserRole.ASSISTANT)
     .sort((a, b) => {
       const parseNum = (val?: string | number) => {
         if (val === undefined || val === null || val === '') return Infinity;

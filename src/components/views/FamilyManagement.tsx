@@ -52,9 +52,15 @@ export default function FamilyManagement() {
     const unsubProfiles = onSnapshot(
       query(collection(db, 'profiles'), where('email', '==', emailQuery)),
       (snapshot) => {
-        const list = snapshot.docs
-          .map(d => ({ id: d.id, ...d.data() } as Profile))
-          .filter(p => !p.isPointer); // Filter out pointer profiles to prevent duplication
+        const seen = new Set<string>();
+        const list: Profile[] = [];
+        for (const d of snapshot.docs) {
+          const item = { ...d.data(), id: d.id } as Profile;
+          if (!item.isPointer && !seen.has(item.id)) {
+            seen.add(item.id);
+            list.push(item);
+          }
+        }
         setFamilyMembers(list);
       },
       (err) => {
@@ -64,12 +70,12 @@ export default function FamilyManagement() {
 
     // Listen to schedule
     const unsubSchedules = onSnapshot(collection(db, 'schedule'), (snapshot) => {
-      setSchedules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Schedule)));
+      setSchedules(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Schedule)));
     });
 
     // Listen to classes for today
     const unsubClasses = onSnapshot(collection(db, 'classes'), (snapshot) => {
-      setClasses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ClassSession)));
+      setClasses(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ClassSession)));
     });
 
     return () => {
