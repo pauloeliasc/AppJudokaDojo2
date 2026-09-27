@@ -13,7 +13,7 @@ import { UserRole } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   User as UserIcon, Lock, Shield, GraduationCap, Users, Fingerprint, 
-  Mail, Eye, EyeOff, Sparkles, CheckCircle2, AlertCircle, ArrowRight,
+  Mail, Eye, EyeOff, CheckCircle2, AlertCircle, ArrowRight,
   Smartphone, Monitor, HelpCircle, X
 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -39,7 +39,6 @@ export default function Login() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [quickLoadingRole, setQuickLoadingRole] = useState<UserRole | null>(null);
   
   // Forgot password modal
   const [showForgotModal, setShowForgotModal] = useState(false);
@@ -183,79 +182,6 @@ export default function Login() {
       }
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Instant 1-Click Role Access (For testing / demonstration across any device)
-  const handleQuickRoleAccess = async (targetRole: UserRole) => {
-    setQuickLoadingRole(targetRole);
-    setError('');
-    setMessage('');
-
-    const roleConfig = {
-      [UserRole.ADMIN]: {
-        email: 'admin@judokadojo.com',
-        name: 'Administrador do Dojô',
-        belt: 'Preta',
-        pass: 'dojo123456'
-      },
-      [UserRole.PROFESSOR]: {
-        email: 'sensei@judokadojo.com',
-        name: 'Sensei Silva',
-        belt: 'Preta',
-        pass: 'dojo123456'
-      },
-      [UserRole.ASSISTANT]: {
-        email: 'ajudante@judokadojo.com',
-        name: 'Ajudante Rafael (Tatame)',
-        belt: 'Marrom',
-        pass: 'dojo123456'
-      },
-      [UserRole.STUDENT]: {
-        email: 'aluno@judokadojo.com',
-        name: 'Lucas Judoca (Aluno)',
-        belt: 'Azul',
-        pass: 'dojo123456'
-      }
-    };
-
-    const cfg = roleConfig[targetRole];
-
-    try {
-      // 1. Try to sign in with pre-configured credentials
-      await signInWithEmailAndPassword(auth, cfg.email, cfg.pass);
-    } catch (err: any) {
-      // 2. If account does not exist yet, provision it seamlessly on the fly
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
-        try {
-          const userCredential = await createUserWithEmailAndPassword(auth, cfg.email, cfg.pass);
-          const uid = userCredential.user.uid;
-
-          await setDoc(doc(db, 'profiles', uid), {
-            id: uid,
-            userId: uid,
-            fullName: cfg.name,
-            email: cfg.email,
-            role: targetRole,
-            currentGrade: cfg.belt,
-            status: 'active',
-            isApproved: true,
-            points: targetRole === UserRole.STUDENT ? 120 : 0,
-            enrollmentDate: new Date().toISOString().split('T')[0]
-          }, { merge: true });
-
-          await setDoc(doc(db, 'users', uid), {
-            role: targetRole
-          }, { merge: true });
-        } catch (createErr: any) {
-          console.error("Auto-provision demo role failed:", createErr);
-          setError(`Não foi possível iniciar como ${cfg.name}: ${createErr.message}`);
-        }
-      } else {
-        setError(`Erro ao acessar como ${cfg.name}: ${err.message}`);
-      }
-    } finally {
-      setQuickLoadingRole(null);
     }
   };
 
@@ -570,105 +496,6 @@ export default function Login() {
               </button>
             </form>
           )}
-
-          {/* Quick Access Section by Role */}
-          <div className="mt-8 pt-6 border-t border-slate-100 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                Acesso Rápido por Função (1 Clique)
-              </span>
-              <span className="text-[10px] text-slate-400 font-medium">
-                Qualquer Dispositivo
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickRoleAccess(UserRole.STUDENT)}
-                disabled={quickLoadingRole !== null || loading}
-                className="p-3 rounded-2xl border border-slate-200 hover:border-blue-400 hover:bg-blue-50/50 transition-all text-left group cursor-pointer disabled:opacity-50"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="w-7 h-7 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-black text-xs shrink-0">
-                    🥋
-                  </span>
-                  <div>
-                    <span className="text-xs font-black text-slate-900 block group-hover:text-blue-700">
-                      Aluno
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-semibold block">
-                      {quickLoadingRole === UserRole.STUDENT ? 'Entrando...' : 'Carteirinha & Gokyo'}
-                    </span>
-                  </div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickRoleAccess(UserRole.ASSISTANT)}
-                disabled={quickLoadingRole !== null || loading}
-                className="p-3 rounded-2xl border border-slate-200 hover:border-amber-400 hover:bg-amber-50/50 transition-all text-left group cursor-pointer disabled:opacity-50"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="w-7 h-7 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-black text-xs shrink-0">
-                    🥋
-                  </span>
-                  <div>
-                    <span className="text-xs font-black text-slate-900 block group-hover:text-amber-800">
-                      Ajudante
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-semibold block">
-                      {quickLoadingRole === UserRole.ASSISTANT ? 'Entrando...' : 'Scanner QR & Tatame'}
-                    </span>
-                  </div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickRoleAccess(UserRole.PROFESSOR)}
-                disabled={quickLoadingRole !== null || loading}
-                className="p-3 rounded-2xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all text-left group cursor-pointer disabled:opacity-50"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="w-7 h-7 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs shrink-0">
-                    🥋
-                  </span>
-                  <div>
-                    <span className="text-xs font-black text-slate-900 block group-hover:text-indigo-700">
-                      Professor
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-semibold block">
-                      {quickLoadingRole === UserRole.PROFESSOR ? 'Entrando...' : 'Sensei & Aulas'}
-                    </span>
-                  </div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickRoleAccess(UserRole.ADMIN)}
-                disabled={quickLoadingRole !== null || loading}
-                className="p-3 rounded-2xl border border-slate-200 hover:border-slate-800 hover:bg-slate-100 transition-all text-left group cursor-pointer disabled:opacity-50"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="w-7 h-7 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black text-xs shrink-0">
-                    🛡️
-                  </span>
-                  <div>
-                    <span className="text-xs font-black text-slate-900 block">
-                      Administrador
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-semibold block">
-                      {quickLoadingRole === UserRole.ADMIN ? 'Entrando...' : 'Gestão Completa'}
-                    </span>
-                  </div>
-                </div>
-              </button>
-            </div>
-          </div>
 
           {/* Cross-Platform Badge Notice */}
           <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-center gap-2 text-[11px] text-slate-400 font-semibold text-center">
