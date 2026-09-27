@@ -30,8 +30,10 @@
         "points": { "type": "number" },
         "role": { "type": "string" },
         "callNumber": { "type": "string" },
+        "matriculaNumber": { "type": "string" },
         "isStudent": { "type": "boolean" },
-        "isPrivateProfile": { "type": "boolean" }
+        "isPrivateProfile": { "type": "boolean" },
+        "gokyoProgress": { "type": "object" }
       },
       "required": ["fullName", "role"]
     },

@@ -9,7 +9,7 @@ import AssistantView from './views/AssistantView';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Home, Users, Calendar, Wallet, Trophy, UserCircle, GraduationCap, 
-  FileText, Clock, Menu, Megaphone, Settings as SettingsIcon, X, LogOut, ChevronRight 
+  FileText, Clock, Menu, Megaphone, Settings as SettingsIcon, X, LogOut, ChevronRight, ChevronLeft 
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -28,13 +28,13 @@ export default function Dashboard() {
     { id: 'home', icon: Home, label: 'Início', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.ASSISTANT, UserRole.STUDENT] },
     { id: 'events', icon: Megaphone, label: 'Mural de Eventos', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.ASSISTANT, UserRole.STUDENT] },
     { id: 'members', icon: Users, label: 'Alunos', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.ASSISTANT] },
-    { id: 'family', icon: Users, label: 'Minha Família', roles: [UserRole.STUDENT] },
-    { id: 'finance', icon: Wallet, label: 'Financeiro', roles: [UserRole.ADMIN] },
-    { id: 'classes', icon: Calendar, label: 'Agenda', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.ASSISTANT] },
-    { id: 'reports', icon: FileText, label: 'Relatórios', roles: [UserRole.ADMIN, UserRole.PROFESSOR] },
+    { id: 'classes', icon: Calendar, label: 'Agenda & Treinos', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.ASSISTANT, UserRole.STUDENT] },
+    { id: 'finance', icon: Wallet, label: 'Financeiro', roles: [UserRole.ADMIN, UserRole.PROFESSOR] },
+    { id: 'reports', icon: FileText, label: 'Relatórios', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.ASSISTANT] },
     { id: 'graduation', icon: GraduationCap, label: 'Exame de Faixa', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.ASSISTANT, UserRole.STUDENT] },
     { id: 'ranking', icon: Trophy, label: 'Conquistas', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.ASSISTANT, UserRole.STUDENT] },
-    { id: 'history', icon: Clock, label: 'Histórico', roles: [UserRole.ASSISTANT, UserRole.STUDENT] },
+    { id: 'history', icon: Clock, label: 'Histórico', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.ASSISTANT, UserRole.STUDENT] },
+    { id: 'family', icon: Users, label: 'Minha Família', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.ASSISTANT, UserRole.STUDENT] },
     { id: 'profile', icon: UserCircle, label: 'Dados Pessoais', roles: [UserRole.ADMIN, UserRole.PROFESSOR, UserRole.ASSISTANT, UserRole.STUDENT] },
     { id: 'settings', icon: SettingsIcon, label: 'Configurações', roles: [UserRole.ADMIN] },
   ];
@@ -51,7 +51,7 @@ export default function Dashboard() {
       case UserRole.ASSISTANT:
         return ['home', 'members', 'classes', 'graduation'];
       case UserRole.STUDENT:
-        return ['home', 'events', 'family', 'ranking'];
+        return ['home', 'classes', 'events', 'ranking'];
       default:
         return ['home', 'events', 'profile'];
     }
@@ -107,19 +107,30 @@ export default function Dashboard() {
 
       {/* Mobile Top Header Bar */}
       <header className="md:hidden fixed top-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 py-3 flex items-center justify-between shadow-xs">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center overflow-hidden shrink-0 border border-slate-700/20">
-            <img 
-              src="./logo.png" 
-              alt="Judoka Dojô" 
-              className="w-7 h-7 object-contain"
-              referrerPolicy="no-referrer"
-            />
-          </div>
-          <div>
+        <div className="flex items-center gap-2.5 min-w-0">
+          {activeTab !== 'home' ? (
+            <button
+              onClick={() => setActiveTab('home')}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-all active:scale-95 border border-slate-200/80 shadow-2xs shrink-0"
+              aria-label="Voltar para o início"
+            >
+              <ChevronLeft className="w-4 h-4 text-slate-600" />
+              <span>Início</span>
+            </button>
+          ) : (
+            <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center overflow-hidden shrink-0 border border-slate-700/20">
+              <img 
+                src="./logo.png" 
+                alt="Judoka Dojô" 
+                className="w-7 h-7 object-contain"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          )}
+          <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="font-extrabold text-sm text-slate-900 tracking-tight">Judoka Dojô</span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+              <span className="font-extrabold text-sm text-slate-900 tracking-tight shrink-0">Judoka Dojô</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 truncate max-w-[130px]">
                 {currentTabItem?.label || 'Início'}
               </span>
             </div>

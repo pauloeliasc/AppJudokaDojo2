@@ -3,7 +3,7 @@ import { db, auth, doc } from '../../lib/firebase';
 import { updateEmail } from 'firebase/auth';
 import { collection, query, onSnapshot, where, collectionGroup, orderBy } from 'firebase/firestore';
 import { Profile, ClassSession, Payment, Settings, Schedule, ClassType, Presence } from '../../types';
-import { Trophy, Wallet, UserCircle, Calendar, CheckCircle2, AlertCircle, Copy, Clock, Star, Activity, Loader2, Gift } from 'lucide-react';
+import { Trophy, Wallet, UserCircle, Calendar, CheckCircle2, AlertCircle, Copy, Clock, Star, Activity, Loader2, Gift, Users, GraduationCap, Megaphone, ArrowRight } from 'lucide-react';
 import { cn, formatDate, getMonthName } from '../../lib/utils';
 import { QRCodeSVG } from 'qrcode.react';
 import GraduationView from './GraduationView';
@@ -13,6 +13,8 @@ import { useAuth } from '../../AuthContext';
 import { profilesApi, classesApi, paymentsApi } from '../../services/firestoreService';
 import { setDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import TodayClasses from '../modules/TodayClasses';
+import BirthdaysBoard from '../modules/BirthdaysBoard';
+import ClassManagement from '../modules/ClassManagement';
 
 export default function StudentView({ activeTab, setActiveTab, forcedProfile }: { activeTab: string, setActiveTab: (t: string) => void, forcedProfile?: Profile | null }) {
   const { user } = useAuth();
@@ -85,17 +87,36 @@ export default function StudentView({ activeTab, setActiveTab, forcedProfile }: 
     };
   }, [user, forcedProfile?.id]);
 
-  if (activeTab === 'home') return <StudentHome profile={profile} classes={classes} payments={payments} schedules={schedules} presences={userPresenceList} allProfiles={allProfiles} settings={settings} />;
+  if (activeTab === 'home') return <StudentHome profile={profile} classes={classes} payments={payments} schedules={schedules} presences={userPresenceList} allProfiles={allProfiles} settings={settings} setActiveTab={setActiveTab} />;
   if (activeTab === 'profile') return <StudentProfile profile={profile} />;
   if (activeTab === 'graduation') return <GraduationView />;
   if (activeTab === 'ranking') return <StudentAchievements profileId={profile?.id} />;
   if (activeTab === 'history') return <FullPresenceHistory presences={userPresenceList} classes={classes} />;
   if (activeTab === 'family') return <FamilyManagement />;
+  if (activeTab === 'classes') return <ClassManagement classes={classes} profiles={allProfiles} />;
 
   return <div>Em breve: {activeTab}</div>;
 }
 
-function StudentHome({ profile, classes, payments, schedules, presences, allProfiles, settings }: { profile: Profile | null, classes: ClassSession[], payments: Payment[], schedules: Schedule[], presences: Presence[], allProfiles: Profile[], settings: Settings | null }) {
+function StudentHome({ 
+  profile, 
+  classes, 
+  payments, 
+  schedules, 
+  presences, 
+  allProfiles, 
+  settings,
+  setActiveTab
+}: { 
+  profile: Profile | null, 
+  classes: ClassSession[], 
+  payments: Payment[], 
+  schedules: Schedule[], 
+  presences: Presence[], 
+  allProfiles: Profile[], 
+  settings: Settings | null,
+  setActiveTab: (t: string) => void
+}) {
   const [copied, setCopied] = useState(false);
   const handleCopyPix = () => {
     if (!settings?.pixKey) return;
@@ -112,39 +133,7 @@ function StudentHome({ profile, classes, payments, schedules, presences, allProf
   const totalCheckIns = presences.length;
   const uniqueDays = new Set(presences.map(p => p.checkInDate || p.timestamp.split('T')[0])).size;
 
-  const birthdayPeople = (allProfiles || []).filter(p => {
-    if (!p.birthDate || p.status === 'inactive' || p.status === 'blocked' || p.isPointer) return false;
-    
-    try {
-      const parts = p.birthDate.split('-');
-      if (parts.length !== 3) return false;
-      const birthMonth = parseInt(parts[1], 10) - 1;
-      const birthDay = parseInt(parts[2], 10);
-      
-      const today = new Date();
-      // Start of current week (Sunday)
-      const currentWeekStart = new Date(today);
-      currentWeekStart.setDate(today.getDate() - today.getDay());
-      currentWeekStart.setHours(0,0,0,0);
-      
-      // End of current week (Saturday)
-      const currentWeekEnd = new Date(currentWeekStart);
-      currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
-      currentWeekEnd.setHours(23,59,59,999);
-      
-      const bdayThisYear = new Date(today.getFullYear(), birthMonth, birthDay);
-      if (bdayThisYear >= currentWeekStart && bdayThisYear <= currentWeekEnd) return true;
-      
-      const bdayNextYear = new Date(today.getFullYear() + 1, birthMonth, birthDay);
-      if (bdayNextYear >= currentWeekStart && bdayNextYear <= currentWeekEnd) return true;
-      
-      const bdayPrevYear = new Date(today.getFullYear() - 1, birthMonth, birthDay);
-      if (bdayPrevYear >= currentWeekStart && bdayPrevYear <= currentWeekEnd) return true;
-    } catch (e) {
-      console.warn("Date parse error for birthday check:", e);
-    }
-    return false;
-  });
+
 
   return (
     <div className="space-y-10">
@@ -165,15 +154,27 @@ function StudentHome({ profile, classes, payments, schedules, presences, allProf
         </div>
         <div className="flex gap-3">
           <div className="flex items-center gap-3 px-5 py-2.5 bg-white rounded-lg border border-slate-200 shadow-sm">
-             <div className="flex flex-col items-center border-r border-slate-100 pr-3">
+             <div 
+               onClick={() => setActiveTab('history')}
+               className="flex flex-col items-center border-r border-slate-100 pr-3 cursor-pointer hover:opacity-80 transition-opacity"
+               title="Ver histórico de treinos"
+             >
                <span className="text-lg font-black text-indigo-600 leading-none">{totalCheckIns}</span>
                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Check-ins</span>
              </div>
-             <div className="flex flex-col items-center border-r border-slate-100 pr-3">
+             <div 
+               onClick={() => setActiveTab('history')}
+               className="flex flex-col items-center border-r border-slate-100 pr-3 cursor-pointer hover:opacity-80 transition-opacity"
+               title="Ver dias de presença"
+             >
                <span className="text-lg font-black text-emerald-600 leading-none">{uniqueDays}</span>
                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Dias</span>
              </div>
-             <div className="flex items-center gap-2 pl-1">
+             <div 
+               onClick={() => setActiveTab('ranking')}
+               className="flex items-center gap-2 pl-1 cursor-pointer hover:opacity-80 transition-opacity"
+               title="Ver ranking e conquistas"
+             >
                <Trophy className="w-5 h-5 text-amber-500" />
                <div className="flex flex-col">
                  <span className="text-lg font-bold text-slate-900 leading-none">{profile?.points || 0}</span>
@@ -183,6 +184,87 @@ function StudentHome({ profile, classes, payments, schedules, presences, allProf
           </div>
         </div>
       </header>
+
+      {/* Quick Navigation Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <button
+          onClick={() => setActiveTab('classes')}
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+        >
+          <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <Calendar className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-indigo-600 transition-colors">Agenda</span>
+            <span className="text-[10px] text-slate-400 font-medium">Horários e treinos</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('graduation')}
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+        >
+          <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <GraduationCap className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-amber-600 transition-colors">Graduação</span>
+            <span className="text-[10px] text-slate-400 font-medium">Exames de faixa</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('ranking')}
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+        >
+          <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <Trophy className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-rose-600 transition-colors">Conquistas</span>
+            <span className="text-[10px] text-slate-400 font-medium">Ranking & medalhas</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('events')}
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+        >
+          <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <Megaphone className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-purple-600 transition-colors">Eventos</span>
+            <span className="text-[10px] text-slate-400 font-medium">Mural e avisos</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('family')}
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+        >
+          <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <Users className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-emerald-600 transition-colors">Família</span>
+            <span className="text-[10px] text-slate-400 font-medium">Dependentes</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('history')}
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+        >
+          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <Clock className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-blue-600 transition-colors">Histórico</span>
+            <span className="text-[10px] text-slate-400 font-medium">Todas presenças</span>
+          </div>
+        </button>
+      </div>
 
       {/* Check-in Section */}
       <TodayClasses profile={profile} classes={classes} schedules={schedules} />
@@ -289,10 +371,7 @@ function StudentHome({ profile, classes, payments, schedules, presences, allProf
             </div>
           </div>
           <button 
-            onClick={() => {
-              const element = document.querySelector('[data-tab="history"]');
-              if (element) (element as HTMLElement).click();
-            }}
+            onClick={() => setActiveTab('history')}
             className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-600 hover:text-indigo-700 bg-indigo-50/50 hover:bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100 transition-all cursor-pointer"
           >
             Ver Histórico Completo
@@ -320,54 +399,8 @@ function StudentHome({ profile, classes, payments, schedules, presences, allProf
         </div>
       </div>
 
-      {/* Secção de Aniversariantes da Semana */}
-      <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center text-violet-600 shrink-0">
-            <Gift className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="font-extrabold text-lg text-slate-900 leading-tight">Aniversariantes da Semana 🎉🎂</h3>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Parabenize seus colegas de tatame nesta semana!</p>
-          </div>
-        </div>
-
-        {birthdayPeople.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {birthdayPeople.map((bMember, idx) => {
-              let birthdayDateStr = '';
-              try {
-                const parts = bMember.birthDate.split('-');
-                if (parts.length === 3) {
-                  birthdayDateStr = `${parts[2]}/${parts[1]}`;
-                }
-              } catch (e) {}
-
-              return (
-                <div key={`${bMember.id}-${idx}`} className="flex items-center gap-4 p-4 bg-violet-50/40 border border-violet-100 rounded-2xl group hover:border-violet-200 transition-all">
-                  <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold overflow-hidden border-2 border-white shadow-sm shrink-0">
-                    {bMember.photoUrl ? (
-                      <img src={bMember.photoUrl} alt={bMember.fullName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    ) : (
-                      bMember.fullName?.charAt(0) || '?'
-                    )}
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="font-bold text-slate-800 text-sm truncate">{bMember.fullName}</span>
-                    <span className="text-[10px] font-bold text-violet-600 uppercase tracking-widest mt-1">
-                      Dia: {birthdayDateStr} 🥳
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 text-center">
-            <p className="text-slate-400 text-xs italic">Nenhum aniversário de aluno nesta semana. Foco nos treinos!</p>
-          </div>
-        )}
-      </div>
+      {/* Quadro de Aniversariantes do Mês e da Semana */}
+      <BirthdaysBoard profiles={allProfiles} />
     </div>
   );
 }

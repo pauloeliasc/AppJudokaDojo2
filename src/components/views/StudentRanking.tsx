@@ -11,8 +11,8 @@ export default function StudentRanking() {
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'profiles'), (snapshot) => {
       const sorted = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as Profile))
-        .filter(p => !p.isPointer && (!p.role || p.role === UserRole.STUDENT || p.role === UserRole.PROFESSOR))
+        .map(doc => ({ ...doc.data(), id: doc.id } as Profile))
+        .filter(p => !p.isPointer && (!p.role || p.role === UserRole.STUDENT || p.role === UserRole.ASSISTANT))
         .sort((a,b) => (b.points || 0) - (a.points || 0));
       setLeaderboard(sorted.slice(0, 10));
     });
@@ -27,7 +27,7 @@ export default function StudentRanking() {
         </div>
         <div>
           <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Ranking dos Guerreiros</h2>
-          <p className="text-slate-500 text-sm font-medium">Os 10 alunos mais dedicados (Pontos por presença e pagamentos).</p>
+          <p className="text-slate-500 text-sm font-medium">Os 10 judokas mais dedicados (Pontos por presença e pagamentos de mensalidade).</p>
         </div>
       </header>
 
@@ -47,7 +47,14 @@ export default function StudentRanking() {
               {i + 1}
             </div>
             <div className="flex-1">
-              <p className="font-bold text-slate-900">{p.fullName}</p>
+              <div className="flex items-center gap-2">
+                <p className="font-bold text-slate-900">{p.fullName}</p>
+                {p.role === UserRole.ASSISTANT && (
+                  <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                    🥋 Ajudante
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2 mt-0.5">
                 {p.currentGrade && (
                   <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Faixa {p.currentGrade}</span>

@@ -35,6 +35,13 @@ export async function createStudentAccount(email: string, profileId: string) {
     
     // Update the profile with the new userId
     await profilesApi.update(profileId, { userId: uid });
+
+    // Sync users/{uid} collection
+    try {
+      await setDoc(doc(db, 'users', uid), { role: 'student' }, { merge: true });
+    } catch (uErr) {
+      console.warn('Silent note: users sync on create:', uErr);
+    }
     
     // Sign out of the secondary instance and delete the app
     await signOut(secondaryAuth);
@@ -50,6 +57,12 @@ export async function createStudentAccount(email: string, profileId: string) {
         const uid = userCredential.user.uid;
         
         await profilesApi.update(profileId, { userId: uid });
+
+        try {
+          await setDoc(doc(db, 'users', uid), { role: 'student' }, { merge: true });
+        } catch (uErr) {
+          console.warn('Silent note: users sync on link:', uErr);
+        }
         
         await signOut(secondaryAuth);
         await deleteApp(secondaryApp);

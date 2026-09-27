@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { db, doc } from '../../lib/firebase';
 import { collection, query, onSnapshot, getDocs, setDoc, updateDoc, deleteDoc, collectionGroup, orderBy } from 'firebase/firestore';
 import { Profile, UserRole, ClassSession, Payment, Settings, Schedule, Presence } from '../../types';
-import { Users, Calendar, Wallet, Plus, Trash2, CheckCircle, Clock, GraduationCap, Activity } from 'lucide-react';
+import { Users, Calendar, Wallet, Plus, Trash2, CheckCircle, Clock, GraduationCap, Activity, Megaphone, Settings as SettingsIcon, ArrowRight } from 'lucide-react';
 import { cn, formatDate } from '../../lib/utils';
 import MemberManagement from '../modules/MemberManagement';
 import FinanceManagement from '../modules/FinanceManagement';
@@ -13,6 +13,9 @@ import StudentAchievements from './StudentAchievements';
 import TodayClasses from '../modules/TodayClasses';
 import AnalyticsDashboard from '../modules/AnalyticsDashboard';
 import PresenceReport from '../modules/PresenceReport';
+import BirthdaysBoard from '../modules/BirthdaysBoard';
+import FamilyManagement from './FamilyManagement';
+import { FullPresenceHistory } from './StudentView';
 import { useAuth } from '../../AuthContext';
 
 export default function AdminView({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (t: string) => void }) {
@@ -91,7 +94,7 @@ export default function AdminView({ activeTab, setActiveTab }: { activeTab: stri
     };
   }, [user]);
 
-  if (activeTab === 'home') return <AdminHome profiles={profiles} classes={classes} payments={payments} schedules={schedules} profile={profile} settings={settings} />;
+  if (activeTab === 'home') return <AdminHome profiles={profiles} classes={classes} payments={payments} schedules={schedules} profile={profile} settings={settings} setActiveTab={setActiveTab} />;
   if (activeTab === 'members') return <MemberManagement profiles={profiles} payments={payments} />;
   if (activeTab === 'finance') return <FinanceManagement profiles={profiles} payments={payments} settings={settings} />;
   if (activeTab === 'classes') return <ClassManagement classes={classes} profiles={profiles} />;
@@ -99,11 +102,29 @@ export default function AdminView({ activeTab, setActiveTab }: { activeTab: stri
   if (activeTab === 'ranking') return <StudentAchievements />;
   if (activeTab === 'reports') return <PresenceReport presences={allPresences} profiles={profiles} classes={classes} payments={payments} settings={settings} />;
   if (activeTab === 'settings') return <SettingsPanel settings={settings} />;
+  if (activeTab === 'history') return <FullPresenceHistory presences={allPresences} classes={classes} />;
+  if (activeTab === 'family') return <FamilyManagement />;
 
   return <div>Em breve: {activeTab}</div>;
 }
 
-function AdminHome({ profiles, classes, payments, schedules, profile, settings }: { profiles: Profile[], classes: ClassSession[], payments: Payment[], schedules: Schedule[], profile: Profile | null, settings: Settings | null }) {
+function AdminHome({ 
+  profiles, 
+  classes, 
+  payments, 
+  schedules, 
+  profile, 
+  settings,
+  setActiveTab
+}: { 
+  profiles: Profile[], 
+  classes: ClassSession[], 
+  payments: Payment[], 
+  schedules: Schedule[], 
+  profile: Profile | null, 
+  settings: Settings | null,
+  setActiveTab: (t: string) => void
+}) {
   const pendingPayments = payments.filter(p => p.status === 'pending').length;
   
   const activeProfiles = profiles.filter(p => !p.status || p.status === 'active');
@@ -112,7 +133,7 @@ function AdminHome({ profiles, classes, payments, schedules, profile, settings }
   const totalAdmins = activeProfiles.filter(p => p.role === UserRole.ADMIN).length;
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <header className="flex justify-between items-end flex-wrap gap-4">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-200 overflow-hidden shrink-0">
@@ -136,7 +157,103 @@ function AdminHome({ profiles, classes, payments, schedules, profile, settings }
         </div>
       </header>
 
+      {/* Quick Navigation Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+        <button
+          onClick={() => setActiveTab('members')}
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+        >
+          <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <Users className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-indigo-600 transition-colors">Alunos</span>
+            <span className="text-[10px] text-slate-400 font-medium">Gerenciar</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('finance')}
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+        >
+          <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <Wallet className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-emerald-600 transition-colors">Financeiro</span>
+            <span className="text-[10px] text-slate-400 font-medium">Mensalidades</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('classes')}
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+        >
+          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <Calendar className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-blue-600 transition-colors">Agenda</span>
+            <span className="text-[10px] text-slate-400 font-medium">Aulas & Treinos</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('reports')}
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+        >
+          <div className="w-9 h-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <Activity className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-violet-600 transition-colors">Relatórios</span>
+            <span className="text-[10px] text-slate-400 font-medium">Presenças & PDF</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('graduation')}
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+        >
+          <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <GraduationCap className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-amber-600 transition-colors">Graduação</span>
+            <span className="text-[10px] text-slate-400 font-medium">Exame Faixa</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('events')}
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+        >
+          <div className="w-9 h-9 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <Megaphone className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-pink-600 transition-colors">Eventos</span>
+            <span className="text-[10px] text-slate-400 font-medium">Mural do Dojô</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('settings')}
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+        >
+          <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <SettingsIcon className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-slate-900 transition-colors">Ajustes</span>
+            <span className="text-[10px] text-slate-400 font-medium">Configurações</span>
+          </div>
+        </button>
+      </div>
+
       <TodayClasses profile={profile} classes={classes} schedules={schedules} />
+
+      <BirthdaysBoard profiles={profiles} />
 
       <div className="space-y-6">
         <div className="flex items-center gap-2 mb-2">

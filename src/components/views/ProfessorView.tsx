@@ -1,16 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { db, doc } from '../../lib/firebase';
 import { collection, query, onSnapshot, collectionGroup, orderBy } from 'firebase/firestore';
-import { Profile, UserRole, ClassSession, Presence, Payment } from '../../types';
-import { Users, Calendar, Trophy, Clock, FileText } from 'lucide-react';
+import { Profile, UserRole, ClassSession, Presence, Payment, Settings } from '../../types';
+import { Users, Calendar, Trophy, Clock, FileText, GraduationCap, Megaphone, Activity, ArrowRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import MemberManagement from '../modules/MemberManagement';
 import ClassManagement from '../modules/ClassManagement';
+import FinanceManagement from '../modules/FinanceManagement';
 import GraduationView from './GraduationView';
 import StudentAchievements from './StudentAchievements';
 import PresenceReport from '../modules/PresenceReport';
 import TodayClasses from '../modules/TodayClasses';
 import AnalyticsDashboard from '../modules/AnalyticsDashboard';
+import BirthdaysBoard from '../modules/BirthdaysBoard';
+import FamilyManagement from './FamilyManagement';
+import { FullPresenceHistory } from './StudentView';
 import { useAuth } from '../../AuthContext';
 import { Schedule } from '../../types';
 
@@ -22,6 +26,7 @@ export default function ProfessorView({ activeTab, setActiveTab }: { activeTab: 
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [settings, setSettings] = useState<Settings | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -54,6 +59,12 @@ export default function ProfessorView({ activeTab, setActiveTab }: { activeTab: 
       setClasses(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ClassSession)));
     });
 
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
+      if (doc.exists()) setSettings(doc.data() as Settings);
+    }, (error) => {
+      console.error("Settings snapshot error:", error);
+    });
+
     const unsubSchedules = onSnapshot(collection(db, 'schedule'), (snapshot) => {
       setSchedules(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Schedule)));
     });
@@ -72,26 +83,44 @@ export default function ProfessorView({ activeTab, setActiveTab }: { activeTab: 
       unsubProfiles();
       unsubPayments();
       unsubClasses();
+      unsubSettings();
       unsubSchedules();
       unsubPresences();
     };
   }, [user]);
 
-  if (activeTab === 'home') return <ProfessorHome profiles={profiles} classes={classes} schedules={schedules} profile={profile} payments={payments} />;
+  if (activeTab === 'home') return <ProfessorHome profiles={profiles} classes={classes} schedules={schedules} profile={profile} payments={payments} setActiveTab={setActiveTab} />;
   if (activeTab === 'members') return <MemberManagement profiles={profiles} payments={payments} />;
   if (activeTab === 'classes') return <ClassManagement classes={classes} profiles={profiles} />;
   if (activeTab === 'graduation') return <GraduationView />;
   if (activeTab === 'ranking') return <StudentAchievements />;
   if (activeTab === 'reports') return <PresenceReport presences={allPresences} profiles={profiles} classes={classes} payments={payments} />;
+  if (activeTab === 'finance') return <FinanceManagement profiles={profiles} payments={payments} settings={settings} />;
+  if (activeTab === 'history') return <FullPresenceHistory presences={allPresences} classes={classes} />;
+  if (activeTab === 'family') return <FamilyManagement />;
 
   return <div>Em breve: {activeTab}</div>;
 }
 
-function ProfessorHome({ profiles, classes, schedules, profile, payments }: { profiles: Profile[], classes: ClassSession[], schedules: Schedule[], profile: Profile | null, payments: Payment[] }) {
+function ProfessorHome({ 
+  profiles, 
+  classes, 
+  schedules, 
+  profile, 
+  payments,
+  setActiveTab
+}: { 
+  profiles: Profile[], 
+  classes: ClassSession[], 
+  schedules: Schedule[], 
+  profile: Profile | null, 
+  payments: Payment[],
+  setActiveTab: (t: string) => void
+}) {
   const totalStudents = profiles.filter(p => !p.role || p.role === UserRole.STUDENT).length;
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <header className="flex justify-between items-end flex-wrap gap-4">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-200 overflow-hidden shrink-0">
@@ -115,7 +144,90 @@ function ProfessorHome({ profiles, classes, schedules, profile, payments }: { pr
         </div>
       </header>
 
+      {/* Quick Navigation Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <button
+          onClick={() => setActiveTab('members')}
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+        >
+          <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <Users className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-indigo-600 transition-colors">Alunos</span>
+            <span className="text-[10px] text-slate-400 font-medium">Gestão & fichas</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('classes')}
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+        >
+          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <Calendar className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-blue-600 transition-colors">Agenda</span>
+            <span className="text-[10px] text-slate-400 font-medium">Grade & treinos</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('reports')}
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+        >
+          <div className="w-9 h-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <Activity className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-violet-600 transition-colors">Relatórios</span>
+            <span className="text-[10px] text-slate-400 font-medium">Presença & PDF</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('graduation')}
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+        >
+          <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <GraduationCap className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-amber-600 transition-colors">Graduação</span>
+            <span className="text-[10px] text-slate-400 font-medium">Exames de faixa</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('events')}
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+        >
+          <div className="w-9 h-9 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <Megaphone className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-pink-600 transition-colors">Eventos</span>
+            <span className="text-[10px] text-slate-400 font-medium">Mural do Dojô</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('ranking')}
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+        >
+          <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <Trophy className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-rose-600 transition-colors">Conquistas</span>
+            <span className="text-[10px] text-slate-400 font-medium">Ranking geral</span>
+          </div>
+        </button>
+      </div>
+
       <TodayClasses profile={profile} classes={classes} schedules={schedules} />
+
+      <BirthdaysBoard profiles={profiles} />
 
       <div className="space-y-6">
         <div className="flex items-center gap-2 mb-2">

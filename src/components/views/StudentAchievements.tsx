@@ -80,9 +80,9 @@ export default function StudentAchievements({ profileId: forcedProfileId }: { pr
     );
   }
 
-  const isStudent = !profile.role || profile.role === UserRole.STUDENT;
+  const canParticipate = !profile.role || profile.role === UserRole.STUDENT || profile.role === UserRole.ASSISTANT;
 
-  if (!isStudent) {
+  if (!canParticipate) {
     return (
       <div className="space-y-10 pb-20">
         <header className="flex items-center gap-5">
@@ -99,7 +99,7 @@ export default function StudentAchievements({ profileId: forcedProfileId }: { pr
           <Award className="w-16 h-16 text-indigo-500 mx-auto mb-4 animate-pulse" />
           <h3 className="text-xl font-bold text-slate-800 mb-2">Painel de Conquistas</h3>
           <p className="text-sm text-slate-500 leading-relaxed">
-            As conquistas, rankings e medalhas virtuais são pontuadas e exibidas exclusivamente para contas de Alunos.
+            As conquistas, rankings e medalhas virtuais são pontuadas e exibidas para Alunos e Ajudantes do Dojô.
           </p>
         </div>
       </div>
@@ -112,9 +112,63 @@ export default function StudentAchievements({ profileId: forcedProfileId }: { pr
   // Define potential badges and their progress criteria
   const potentialBadges = [
     {
+      id: 'paid-month',
+      title: 'Mensalidade em Dia',
+      description: 'Mantenha sua mensalidade do mês atual confirmada pela administração (+50 pontos).',
+      icon: 'Coins',
+      check: () => {
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+        const isPaid = memberPayments.some(p => p.month === currentMonth && p.year === currentYear && p.status === 'paid');
+        if (isPaid) return { status: 'earned', progress: 100, message: 'Mensalidade quitada!' };
+        return { status: 'pending', progress: 0, message: 'Aguardando confirmação do pagamento.' };
+      }
+    },
+    {
+      id: '3-months-paid',
+      title: 'Compromisso com o Dojô',
+      description: 'Tenha 3 ou mais mensalidades quitadas registradas no sistema.',
+      icon: 'Award',
+      check: () => {
+        const paidCount = memberPayments.filter(p => p.status === 'paid').length;
+        if (paidCount >= 3) return { status: 'earned', progress: 100, message: `${paidCount} mensalidades pagas!` };
+        return { 
+          status: 'pending', 
+          progress: Math.min(99, Math.round((paidCount / 3) * 100)), 
+          message: `${paidCount}/3 mensalidades confirmadas.` 
+        };
+      }
+    },
+    {
+      id: 'warrior-combo',
+      title: 'Guerreiro Exemplar',
+      description: 'Mensalidade em dia e pelo menos 4 treinos realizados no mês atual.',
+      icon: 'Star',
+      check: () => {
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+        const isPaid = memberPayments.some(p => p.month === currentMonth + 1 && p.year === currentYear && p.status === 'paid');
+        const monthPresences = memberPresences.filter(p => {
+          const d = new Date(p.timestamp);
+          return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        }).length;
+
+        if (isPaid && monthPresences >= 4) return { status: 'earned', progress: 100, message: 'Conquista alcançada!' };
+        const presencesScore = Math.min(4, monthPresences) * 12.5; // up to 50%
+        const paymentScore = isPaid ? 50 : 0; // up to 50%
+        const progress = Math.round(presencesScore + paymentScore);
+        const statusMsg = !isPaid 
+          ? `Falta pagamento (${monthPresences}/4 treinos)` 
+          : `${monthPresences}/4 treinos no mês`;
+        return { status: 'pending', progress, message: statusMsg };
+      }
+    },
+    {
       id: 'top-3-month',
       title: 'Top 3 do Mês',
-      description: 'Fique entre os 3 alunos com mais presenças no mês atual.',
+      description: 'Fique entre os 3 alunos/ajudantes com mais presenças no mês atual.',
       icon: 'Trophy',
       check: () => {
         const now = new Date();
@@ -124,13 +178,13 @@ export default function StudentAchievements({ profileId: forcedProfileId }: { pr
           const d = new Date(p.timestamp);
           return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
         });
-        const studentIds = new Set(
+        const eligibleIds = new Set(
           allProfiles
-            .filter(p => !p.role || p.role === UserRole.STUDENT)
+            .filter(p => !p.role || p.role === UserRole.STUDENT || p.role === UserRole.ASSISTANT)
             .map(p => p.id)
         );
-        const studentMonthPresences = currentMonthPresences.filter(p => studentIds.has(p.memberId));
-        const memberCounts = studentMonthPresences.reduce((acc, p) => {
+        const eligibleMonthPresences = currentMonthPresences.filter(p => eligibleIds.has(p.memberId));
+        const memberCounts = eligibleMonthPresences.reduce((acc, p) => {
           acc[p.memberId] = (acc[p.memberId] || 0) + 1;
           return acc;
         }, {} as Record<string, number>);
@@ -152,7 +206,7 @@ export default function StudentAchievements({ profileId: forcedProfileId }: { pr
     {
       id: 'top-5-month',
       title: 'Top 5 do Mês',
-      description: 'Fique entre os 5 alunos com mais presenças no mês atual.',
+      description: 'Fique entre os 5 com mais presenças no mês atual.',
       icon: 'TrendingUp',
       check: () => {
         const now = new Date();
@@ -162,13 +216,13 @@ export default function StudentAchievements({ profileId: forcedProfileId }: { pr
           const d = new Date(p.timestamp);
           return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
         });
-        const studentIds = new Set(
+        const eligibleIds = new Set(
           allProfiles
-            .filter(p => !p.role || p.role === UserRole.STUDENT)
+            .filter(p => !p.role || p.role === UserRole.STUDENT || p.role === UserRole.ASSISTANT)
             .map(p => p.id)
         );
-        const studentMonthPresences = currentMonthPresences.filter(p => studentIds.has(p.memberId));
-        const memberCounts = studentMonthPresences.reduce((acc, p) => {
+        const eligibleMonthPresences = currentMonthPresences.filter(p => eligibleIds.has(p.memberId));
+        const memberCounts = eligibleMonthPresences.reduce((acc, p) => {
           acc[p.memberId] = (acc[p.memberId] || 0) + 1;
           return acc;
         }, {} as Record<string, number>);
@@ -190,7 +244,7 @@ export default function StudentAchievements({ profileId: forcedProfileId }: { pr
     {
       id: 'top-10-month',
       title: 'Top 10 do Mês',
-      description: 'Fique entre os 10 alunos com mais presenças no mês atual.',
+      description: 'Fique entre os 10 com mais presenças no mês atual.',
       icon: 'Award',
       check: () => {
         const now = new Date();
@@ -200,13 +254,13 @@ export default function StudentAchievements({ profileId: forcedProfileId }: { pr
           const d = new Date(p.timestamp);
           return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
         });
-        const studentIds = new Set(
+        const eligibleIds = new Set(
           allProfiles
-            .filter(p => !p.role || p.role === UserRole.STUDENT)
+            .filter(p => !p.role || p.role === UserRole.STUDENT || p.role === UserRole.ASSISTANT)
             .map(p => p.id)
         );
-        const studentMonthPresences = currentMonthPresences.filter(p => studentIds.has(p.memberId));
-        const memberCounts = studentMonthPresences.reduce((acc, p) => {
+        const eligibleMonthPresences = currentMonthPresences.filter(p => eligibleIds.has(p.memberId));
+        const memberCounts = eligibleMonthPresences.reduce((acc, p) => {
           acc[p.memberId] = (acc[p.memberId] || 0) + 1;
           return acc;
         }, {} as Record<string, number>);

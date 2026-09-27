@@ -4,6 +4,24 @@ import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { setDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { User, UserRole, Profile } from './types';
 
+export const normalizeUserRole = (rawRole: any): UserRole => {
+  if (!rawRole) return UserRole.STUDENT;
+  const str = String(rawRole).toLowerCase().trim();
+  if (str === 'admin' || str === 'administrador' || str === 'administrator' || str === 'diretor') {
+    return UserRole.ADMIN;
+  }
+  if (str === 'professor' || str === 'sensei' || str === 'instrutor' || str === 'teacher') {
+    return UserRole.PROFESSOR;
+  }
+  if (str === 'assistant' || str === 'ajudante' || str === 'monitor' || str === 'auxiliar') {
+    return UserRole.ASSISTANT;
+  }
+  if (str === 'student' || str === 'aluno' || str === 'atleta') {
+    return UserRole.STUDENT;
+  }
+  return UserRole.STUDENT;
+};
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -120,23 +138,68 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const rawEmail = firebaseUser.email?.toLowerCase().trim() || '';
     const email = rawEmail.replace(/\+reset\d+@/, '@');
-    const isAdminEmail = email === 'pauloeliasc@gmail.com' || email === 'judokadojoosasco@gmail.com';
+    const isAdminEmail = 
+      email === 'pauloeliasc@gmail.com' || 
+      email === 'pauloeliasc@hotmail.com' || 
+      email === 'judokadojoosasco@gmail.com' || 
+      email === 'admin@judokadojo.com';
+    const isProfessorEmail = email === 'sensei@judokadojo.com';
+    const isAssistantEmail = email === 'ajudante@judokadojo.com';
 
     unsubscribeProfile = onSnapshot(doc(db, 'profiles', activeProfileId), async (docSnapshot) => {
       if (docSnapshot.exists()) {
         const pData = docSnapshot.data();
         
-        // Link with UID if it's not set
-        if (activeProfileId === firebaseUser.uid && pData.userId !== firebaseUser.uid) {
+        // Link with UID on the primary profile document if not already set
+        if (pData.userId !== firebaseUser.uid) {
           try {
             await setDoc(doc(db, 'profiles', activeProfileId), { userId: firebaseUser.uid }, { merge: true });
           } catch (e) {
-            console.warn("Could not link active user with UID:", e);
+            console.warn("Could not link active user with UID on profile:", e);
           }
         }
 
-        const isProfileAdmin = pData.role === UserRole.ADMIN || isAdminEmail;
-        const currentProf = { id: activeProfileId, ...pData } as Profile;
+        const parsedRole = normalizeUserRole(pData.role);
+        const effectiveRole = isAdminEmail 
+          ? UserRole.ADMIN 
+          : isProfessorEmail 
+          ? UserRole.PROFESSOR 
+          : isAssistantEmail 
+          ? UserRole.ASSISTANT 
+          : parsedRole;
+
+        // Auto-heal profile role in database if stored with non-canonical value (e.g. 'administrador', 'aluno')
+        if (pData.role !== effectiveRole) {
+          try {
+            await setDoc(doc(db, 'profiles', activeProfileId), { role: effectiveRole }, { merge: true });
+          } catch (healErr) {
+            console.warn("Could not auto-heal profile role:", healErr);
+          }
+        }
+
+        // CRITICAL FOR FIRESTORE RULES:
+        // Firestore rules check exists(/databases/$(database)/documents/profiles/$(request.auth.uid)).
+        // We ensure both profiles/{firebaseUser.uid} and users/{firebaseUser.uid} exist and store the role.
+        try {
+          await setDoc(doc(db, 'profiles', firebaseUser.uid), {
+            id: firebaseUser.uid,
+            userId: firebaseUser.uid,
+            role: effectiveRole,
+            fullName: pData.fullName || pData.name || '',
+            email: firebaseUser.email || pData.email || '',
+            targetProfileId: activeProfileId,
+            isPointer: activeProfileId !== firebaseUser.uid,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+
+          await setDoc(doc(db, 'users', firebaseUser.uid), {
+            role: effectiveRole
+          }, { merge: true });
+        } catch (syncErr) {
+          console.warn("Could not sync auth profile/user document for rules:", syncErr);
+        }
+
+        const currentProf = { id: activeProfileId, ...pData, role: effectiveRole } as Profile;
         setActiveProfile(currentProf);
 
         setUser({
@@ -144,23 +207,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: activeProfileId,
           email: firebaseUser.email || '',
           name: pData.fullName || pData.name || pData.username || email.split('@')[0],
-          role: isProfileAdmin ? UserRole.ADMIN : (pData.role || UserRole.STUDENT),
+          role: effectiveRole,
           username: pData.username || email.split('@')[0],
-          isApproved: isProfileAdmin ? true : (pData.isApproved ?? false),
-          status: isProfileAdmin ? 'active' : (pData.status ?? 'pending')
+          isApproved: (isAdminEmail || isProfessorEmail || isAssistantEmail) ? true : (pData.isApproved !== false),
+          status: (isAdminEmail || isProfessorEmail || isAssistantEmail) ? 'active' : (pData.status || 'active')
         });
       } else {
         setActiveProfile(null);
         // Create matching fallback profile if it doesn't exist yet
+        const defaultRole = isAdminEmail 
+          ? UserRole.ADMIN 
+          : isProfessorEmail 
+          ? UserRole.PROFESSOR 
+          : isAssistantEmail 
+          ? UserRole.ASSISTANT 
+          : UserRole.STUDENT;
+
+        const defaultGrade = (isAdminEmail || isProfessorEmail) 
+          ? 'Preta' 
+          : isAssistantEmail 
+          ? 'Marrom' 
+          : 'Branca';
+
         const newUser: User = {
           uid: firebaseUser.uid,
           id: activeProfileId,
           email: firebaseUser.email || '',
           name: firebaseUser.displayName || email.split('@')[0] || 'Usuário',
-          role: isAdminEmail ? UserRole.ADMIN : UserRole.STUDENT,
+          role: defaultRole,
           username: email.split('@')[0],
-          isApproved: isAdminEmail ? true : false,
-          status: isAdminEmail ? 'active' : 'pending'
+          isApproved: true,
+          status: 'active'
         };
 
         setUser(newUser);
@@ -174,12 +251,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               email: newUser.email,
               role: newUser.role,
               username: newUser.username,
-              isApproved: newUser.isApproved,
-              status: newUser.status,
+              isApproved: true,
+              status: 'active',
               enrollmentDate: new Date().toISOString().split('T')[0],
-              points: 0,
-              currentGrade: isAdminEmail ? 'Preta' : 'Branca'
+              points: 50,
+              currentGrade: defaultGrade
             });
+
+            await setDoc(doc(db, 'users', firebaseUser.uid), {
+              role: defaultRole
+            }, { merge: true });
           } catch (e) {
             console.error("Failed to auto-create profile doc:", e);
           }

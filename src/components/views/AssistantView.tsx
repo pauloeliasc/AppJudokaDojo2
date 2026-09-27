@@ -5,9 +5,12 @@ import { Profile, UserRole, ClassSession, Presence, Payment, Schedule } from '..
 import { Users, Calendar, Trophy, Clock, UserPlus, CheckCircle2, ShieldCheck, ArrowRight, GraduationCap } from 'lucide-react';
 import MemberManagement from '../modules/MemberManagement';
 import ClassManagement from '../modules/ClassManagement';
+import PresenceReport from '../modules/PresenceReport';
 import GraduationView from './GraduationView';
 import StudentAchievements from './StudentAchievements';
 import TodayClasses from '../modules/TodayClasses';
+import BirthdaysBoard from '../modules/BirthdaysBoard';
+import FamilyManagement from './FamilyManagement';
 import { FullPresenceHistory } from './StudentView';
 import { useAuth } from '../../AuthContext';
 
@@ -94,6 +97,8 @@ export default function AssistantView({ activeTab, setActiveTab }: { activeTab: 
     const myPresences = allPresences.filter(p => p.memberId === profile?.id);
     return <FullPresenceHistory presences={myPresences} classes={classes} />;
   }
+  if (activeTab === 'reports') return <PresenceReport presences={allPresences} profiles={profiles} classes={classes} payments={payments} />;
+  if (activeTab === 'family') return <FamilyManagement />;
 
   return <div>Em breve: {activeTab}</div>;
 }
@@ -241,6 +246,9 @@ function AssistantHome({
       <div id="today-classes-section">
         <TodayClasses profile={profile} classes={classes} schedules={schedules} />
       </div>
+
+      {/* Quadro de Aniversariantes */}
+      <BirthdaysBoard profiles={profiles} />
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { Wallet, CheckCircle2, AlertCircle, Copy, QrCode } from 'lucide-react';
 import { cn, getMonthName } from '../../lib/utils';
 import { paymentsApi, profilesApi } from '../../services/firestoreService';
 
-export default function FinanceManagement({ profiles, payments, settings }: { profiles: Profile[], payments: Payment[], settings: Settings | null }) {
+export default function FinanceManagement({ profiles, payments, settings = null }: { profiles: Profile[], payments: Payment[], settings?: Settings | null }) {
   const [loading, setLoading] = useState(false);
 
   const students = React.useMemo(() => {

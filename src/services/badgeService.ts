@@ -22,12 +22,12 @@ export const calculateBadges = (
   const badges: Badge[] = [];
   const now = new Date();
   
-  // If we have profiles, verify if the evaluated member is a student. Only students get achievements.
+  // If we have profiles, verify if the evaluated member is a student or assistant.
   if (profiles) {
     const targetProfile = profiles.find(p => p.id === memberId);
     if (targetProfile) {
-      const isStudent = !targetProfile.role || targetProfile.role === UserRole.STUDENT;
-      if (!isStudent) {
+      const isEligible = !targetProfile.role || targetProfile.role === UserRole.STUDENT || targetProfile.role === UserRole.ASSISTANT;
+      if (!isEligible) {
         return [];
       }
     }
@@ -45,14 +45,14 @@ export const calculateBadges = (
     return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
   });
 
-  // Filter out any check-ins that do not belong to students
+  // Filter out any check-ins that do not belong to students or assistants
   if (profiles) {
-    const studentIds = new Set(
+    const eligibleIds = new Set(
       profiles
-        .filter(p => !p.role || p.role === UserRole.STUDENT)
+        .filter(p => !p.role || p.role === UserRole.STUDENT || p.role === UserRole.ASSISTANT)
         .map(p => p.id)
     );
-    currentMonthPresences = currentMonthPresences.filter(p => studentIds.has(p.memberId));
+    currentMonthPresences = currentMonthPresences.filter(p => eligibleIds.has(p.memberId));
   }
   
   const memberCounts = currentMonthPresences.reduce((acc, p) => {
@@ -164,8 +164,49 @@ export const calculateBadges = (
   }
 
   // --- Finance Badges ---
-  // Removed per instructions: only the administrator profile manages monthly fees now.
-  // Conquistas/Achievements related to payments/finance has been deactivated.
+  // Alunos e Ajudantes conquistam medalhas ao manterem suas mensalidades em dia
+  const isPaidCurrentMonth = memberPayments.some(
+    p => p.month === currentMonth + 1 && p.year === currentYear && p.status === 'paid'
+  );
+
+  if (isPaidCurrentMonth) {
+    badges.push({
+      id: 'paid-month',
+      title: 'Mensalidade em Dia',
+      description: `Contribuição pontual confirmada em ${now.toLocaleString('pt-BR', { month: 'long' })}. Honra e disciplina!`,
+      icon: 'Coins',
+      type: 'finance',
+      dateEarned: now.toISOString()
+    });
+  }
+
+  const paidCount = memberPayments.filter(p => p.status === 'paid').length;
+  if (paidCount >= 3) {
+    badges.push({
+      id: '3-months-paid',
+      title: 'Compromisso com o Dojô',
+      description: 'Manteve 3 ou mais mensalidades confirmadas no sistema. Exemplo de responsabilidade!',
+      icon: 'Award',
+      type: 'finance',
+      dateEarned: now.toISOString()
+    });
+  }
+
+  const currentMonthPresencesCount = memberPresences.filter(p => {
+    const d = new Date(p.timestamp);
+    return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+  }).length;
+
+  if (isPaidCurrentMonth && currentMonthPresencesCount >= 4) {
+    badges.push({
+      id: 'warrior-combo',
+      title: 'Guerreiro Exemplar',
+      description: 'Mensalidade em dia e alta frequência com pelo menos 4 treinos no mês.',
+      icon: 'Star',
+      type: 'special',
+      dateEarned: now.toISOString()
+    });
+  }
 
   return badges;
 };

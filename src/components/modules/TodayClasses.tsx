@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { db, doc } from '../../lib/firebase';
 import { collection, query, onSnapshot, where, collectionGroup, setDoc, deleteDoc } from 'firebase/firestore';
 import { Profile, ClassSession, Schedule, Presence, UserRole } from '../../types';
-import { Star, Clock, Activity, Loader2, AlertCircle, Users, EyeOff, Lock, XCircle, RefreshCw, CheckCircle2, Search, Plus } from 'lucide-react';
+import { Star, Clock, Activity, Loader2, AlertCircle, Users, EyeOff, Lock, XCircle, RefreshCw, CheckCircle2, Search, Plus, Zap, QrCode } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { cn } from '../../lib/utils';
 import { profilesApi, classesApi } from '../../services/firestoreService';
 import { motion, AnimatePresence } from 'motion/react';
+import QRCodeAttendanceScanner from './QRCodeAttendanceScanner';
 
 interface TodayClassesProps {
   profile: Profile | null;
@@ -19,6 +20,7 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
   const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
   const [allTodayPresences, setAllTodayPresences] = useState<Presence[]>([]);
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
+  const [showScannerModal, setShowScannerModal] = useState<boolean>(false);
 
   const today = new Date();
   const dayOfWeek = today.getDay();
@@ -464,11 +466,30 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
 
   return (
     <div className="bg-white p-8 rounded-[2.5rem] border border-[#0a0a0a]/5 shadow-sm">
+      {/* Real-time Camera Attendance Scanner Modal */}
+      {showScannerModal && (
+        <QRCodeAttendanceScanner 
+          classes={classes} 
+          profiles={allProfiles} 
+          onClose={() => setShowScannerModal(false)} 
+        />
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
           <Activity className="w-6 h-6 text-indigo-500" />
           <h3 className="font-bold text-xl uppercase tracking-tight">Treinos Disponíveis Hoje</h3>
         </div>
+
+        {canManageAttendance && (
+          <button
+            onClick={() => setShowScannerModal(true)}
+            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all active:scale-95 cursor-pointer self-start sm:self-auto"
+          >
+            <Zap className="w-4 h-4 fill-current" />
+            <span>Scanner QR (Câmera)</span>
+          </button>
+        )}
       </div>
 
       {isAdminOrProfessor && (

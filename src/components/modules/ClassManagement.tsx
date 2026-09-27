@@ -6,8 +6,13 @@ import { Calendar, Plus, Users, Trash2, CheckCircle2, Clock, CalendarDays, Star,
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { classesApi, profilesApi, scheduleApi } from '../../services/firestoreService';
+import { useAuth } from '../../AuthContext';
 
 export default function ClassManagement({ classes, profiles }: { classes: ClassSession[], profiles: Profile[] }) {
+  const { user } = useAuth();
+  const canManage = user?.role === UserRole.ADMIN || user?.role === UserRole.PROFESSOR || user?.role === UserRole.ASSISTANT;
+  const isLeader = user?.role === UserRole.ADMIN || user?.role === UserRole.PROFESSOR;
+
   const [isAdding, setIsAdding] = useState(false);
   const [isAddingSchedule, setIsAddingSchedule] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
@@ -89,22 +94,29 @@ export default function ClassManagement({ classes, profiles }: { classes: ClassS
             </button>
           </div>
         </div>
-        <div className="flex gap-3">
-          <button 
-            onClick={() => setIsAddingSchedule(true)}
-            className="bg-white border border-slate-200 text-slate-900 px-6 py-3.5 rounded-2xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm"
-          >
-            <CalendarDays className="w-5 h-5 text-indigo-500" />
-            <span>Grade Semanal</span>
-          </button>
-          <button 
-            onClick={() => setIsAdding(true)}
-            className="bg-slate-900 text-white px-6 py-3.5 rounded-2xl font-bold text-sm flex items-center gap-2 hover:bg-slate-800 transition-all shadow-xl"
-          >
-            <Star className="w-5 h-5 text-amber-400" />
-            <span>Aula Especial</span>
-          </button>
-        </div>
+        {isLeader ? (
+          <div className="flex gap-3">
+            <button 
+              onClick={() => setIsAddingSchedule(true)}
+              className="bg-white border border-slate-200 text-slate-900 px-6 py-3.5 rounded-2xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm cursor-pointer"
+            >
+              <CalendarDays className="w-5 h-5 text-indigo-500" />
+              <span>Grade Semanal</span>
+            </button>
+            <button 
+              onClick={() => setIsAdding(true)}
+              className="bg-slate-900 text-white px-6 py-3.5 rounded-2xl font-bold text-sm flex items-center gap-2 hover:bg-slate-800 transition-all shadow-xl cursor-pointer"
+            >
+              <Star className="w-5 h-5 text-amber-400" />
+              <span>Aula Especial</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-xs font-bold text-indigo-700">
+            <Calendar className="w-4 h-4 text-indigo-600" />
+            <span>Grade Oficial de Treinos</span>
+          </div>
+        )}
       </div>
 
       {activeView === 'agenda' ? (
@@ -134,46 +146,52 @@ export default function ClassManagement({ classes, profiles }: { classes: ClassS
                       <div key={`${s.id}-${sIdx}`} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm group relative">
                         <div className="flex justify-between items-start mb-2">
                           <span className="text-[10px] font-black text-slate-900">{s.time}</span>
-                          <div className="flex gap-1">
-                            <button 
-                              onClick={() => {
-                                // Find or create session for this schedule + today
-                                const now = new Date();
-                                const todayStr = now.getFullYear() + '-' + 
-                                  String(now.getMonth() + 1).padStart(2, '0') + '-' + 
-                                  String(now.getDate()).padStart(2, '0');
-                                const existingSession = classes.find(c => c.scheduleId === s.id && c.date.startsWith(todayStr));
-                                if (existingSession) {
-                                  setSelectedClassId(existingSession.id);
-                                } else {
-                                  // Auto-create session if it's today's day
-                                  if (new Date().getDay() === s.dayOfWeek) {
-                                    handleCreateSessionFromSchedule(s);
+                          {canManage && (
+                            <div className="flex gap-1">
+                              <button 
+                                onClick={() => {
+                                  // Find or create session for this schedule + today
+                                  const now = new Date();
+                                  const todayStr = now.getFullYear() + '-' + 
+                                    String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                                    String(now.getDate()).padStart(2, '0');
+                                  const existingSession = classes.find(c => c.scheduleId === s.id && c.date.startsWith(todayStr));
+                                  if (existingSession) {
+                                    setSelectedClassId(existingSession.id);
                                   } else {
-                                    alert('Você só pode abrir a chamada de treinos da grade semanal no dia correspondente.');
+                                    // Auto-create session if it's today's day
+                                    if (new Date().getDay() === s.dayOfWeek) {
+                                      handleCreateSessionFromSchedule(s);
+                                    } else {
+                                      alert('Você só pode abrir a chamada de treinos da grade semanal no dia correspondente.');
+                                    }
                                   }
-                                }
-                              }}
-                              className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
-                              title="Fazer Chamada"
-                            >
-                              <Users className="w-3 h-3" />
-                            </button>
-                            <button 
-                              onClick={() => setEditingSchedule(s)}
-                              className="p-1 text-slate-400 hover:text-amber-500 transition-colors"
-                              title="Editar Horário"
-                            >
-                              <Pencil className="w-3 h-3" />
-                            </button>
-                            <button 
-                              onClick={() => setConfirmDeleteScheduleId(s.id)}
-                              className="p-1 text-slate-300 hover:text-red-500 transition-colors cursor-pointer"
-                              title="Excluir Horário"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
+                                }}
+                                className="p-1 text-slate-400 hover:text-indigo-600 transition-colors cursor-pointer"
+                                title="Fazer Chamada"
+                              >
+                                <Users className="w-3 h-3" />
+                              </button>
+                              {isLeader && (
+                                <>
+                                  <button 
+                                    onClick={() => setEditingSchedule(s)}
+                                    className="p-1 text-slate-400 hover:text-amber-500 transition-colors cursor-pointer"
+                                    title="Editar Horário"
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                  </button>
+                                  <button 
+                                    onClick={() => setConfirmDeleteScheduleId(s.id)}
+                                    className="p-1 text-slate-300 hover:text-red-500 transition-colors cursor-pointer"
+                                    title="Excluir Horário"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
                         </div>
                         <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-tight mb-1">{s.type}</p>
                         <p className="text-[8px] font-medium text-slate-400 truncate">
@@ -206,13 +224,15 @@ export default function ClassManagement({ classes, profiles }: { classes: ClassS
                       <div className="p-3 bg-white rounded-xl shadow-sm text-amber-500">
                         <Calendar className="w-5 h-5" />
                       </div>
-                      <button 
-                        onClick={() => setConfirmDeleteSpecial({ id: c.id, title: c.title })}
-                        className="p-2 text-slate-300 hover:text-red-500 transition-colors cursor-pointer"
-                        title="Excluir aula especial"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {isLeader && (
+                        <button 
+                          onClick={() => setConfirmDeleteSpecial({ id: c.id, title: c.title })}
+                          className="p-2 text-slate-300 hover:text-red-500 transition-colors cursor-pointer"
+                          title="Excluir aula especial"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                     <h4 className="font-bold text-slate-900 text-lg mb-1">{c.title}</h4>
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-400 mb-6">
@@ -222,9 +242,9 @@ export default function ClassManagement({ classes, profiles }: { classes: ClassS
                   </div>
                   <button 
                     onClick={() => setSelectedClassId(c.id)}
-                    className="w-full bg-white text-slate-900 py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-900 hover:text-white transition-all shadow-sm"
+                    className="w-full bg-white text-slate-900 py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-900 hover:text-white transition-all shadow-sm cursor-pointer"
                   >
-                    <Users className="w-4 h-4" /> Ver Chamada
+                    <Users className="w-4 h-4" /> {canManage ? 'Ver Chamada' : 'Ver Participantes'}
                   </button>
                 </div>
               ))}
@@ -242,13 +262,15 @@ export default function ClassManagement({ classes, profiles }: { classes: ClassS
                 )}>
                   {getIconForType(c.type || ClassType.JUDO)}
                 </div>
-                <button 
-                  onClick={() => setConfirmDeleteClass({ id: c.id, title: c.title })}
-                  className="opacity-0 group-hover:opacity-100 p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer"
-                  title="Excluir aula"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {isLeader && (
+                  <button 
+                    onClick={() => setConfirmDeleteClass({ id: c.id, title: c.title })}
+                    className="opacity-0 group-hover:opacity-100 p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer"
+                    title="Excluir aula"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
               
               <div className="flex items-center gap-2 mb-1">
@@ -268,9 +290,9 @@ export default function ClassManagement({ classes, profiles }: { classes: ClassS
                 </div>
                 <button 
                   onClick={() => setSelectedClassId(c.id)}
-                  className="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/10"
+                  className="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/10 cursor-pointer"
                 >
-                  <Users className="w-4 h-4" /> Chamada
+                  <Users className="w-4 h-4" /> {canManage ? 'Chamada' : 'Ver Participantes'}
                 </button>
               </div>
             </div>
@@ -803,6 +825,8 @@ function EditScheduleModal({ schedule, profiles, onClose }: { schedule: Schedule
 }
 
 function PresenceModal({ session, profiles, onClose }: { session: ClassSession, profiles: Profile[], onClose: () => void }) {
+  const { user } = useAuth();
+  const canManage = user?.role === UserRole.ADMIN || user?.role === UserRole.PROFESSOR || user?.role === UserRole.ASSISTANT;
   const [presences, setPresences] = useState<Record<string, boolean>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const students = profiles
@@ -909,9 +933,13 @@ function PresenceModal({ session, profiles, onClose }: { session: ClassSession, 
             filteredStudents.map((s, idx) => (
               <button 
                 key={`${s.id}-${idx}`}
-                onClick={() => togglePresence(s.id)}
+                disabled={!canManage}
+                onClick={() => {
+                  if (canManage) togglePresence(s.id);
+                }}
                 className={cn(
-                  "w-full flex items-center justify-between p-4 rounded-2xl transition-all border-2 active:scale-[0.98]",
+                  "w-full flex items-center justify-between p-4 rounded-2xl transition-all border-2",
+                  canManage ? "active:scale-[0.98] cursor-pointer" : "cursor-default",
                   presences[s.id] 
                     ? "bg-emerald-50 border-emerald-200 text-emerald-900" 
                     : "bg-white border-slate-50 hover:border-slate-100 hover:bg-slate-50 text-slate-700"

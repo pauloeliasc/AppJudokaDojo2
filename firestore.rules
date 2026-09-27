@@ -19,30 +19,36 @@ service cloud.firestore {
       return isSignedIn() && (
         (request.auth.token.email != null && (
           request.auth.token.email.lower() == 'pauloeliasc@gmail.com' || 
-          request.auth.token.email.lower() == 'judokadojoosasco@gmail.com'
+          request.auth.token.email.lower() == 'pauloeliasc@hotmail.com' ||
+          request.auth.token.email.lower() == 'judokadojoosasco@gmail.com' ||
+          request.auth.token.email.lower() == 'admin@judokadojo.com'
         )) ||
         (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('role', '') == 'admin')
+         get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('role', '') in ['admin', 'administrador', 'ADMIN', 'Administrador']) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['admin', 'administrador', 'ADMIN', 'Administrador'])
       );
     }
 
     function isProfessor() {
       return isSignedIn() && (
-        (request.auth.token.email != null && (
-          request.auth.token.email.lower() == 'pauloeliasc@gmail.com' || 
-          request.auth.token.email.lower() == 'judokadojoosasco@gmail.com'
-         )) ||
+        isAdmin() ||
+        (request.auth.token.email != null && request.auth.token.email.lower() == 'sensei@judokadojo.com') ||
         (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) && 
-         (get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('role', '') == 'professor' || 
-          get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('role', '') == 'admin'))
+         (get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('role', '') in ['professor', 'sensei', 'instrutor', 'PROFESSOR', 'admin', 'administrador'])) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['professor', 'sensei', 'instrutor', 'PROFESSOR', 'admin', 'administrador']))
       );
     }
 
     function isAssistant() {
       return isSignedIn() && (
         isProfessor() ||
+        (request.auth.token.email != null && request.auth.token.email.lower() == 'ajudante@judokadojo.com') ||
         (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('role', '') == 'assistant')
+         (get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('role', '') in ['assistant', 'ajudante', 'monitor', 'ASSISTANT', 'professor', 'sensei', 'admin'])) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['assistant', 'ajudante', 'monitor', 'ASSISTANT', 'professor', 'sensei', 'admin']))
       );
     }
 
@@ -89,13 +95,13 @@ service cloud.firestore {
 
     function isValidUser(data) {
       return data.keys().hasAll(['role']) &&
-             data.role in ['admin', 'professor', 'assistant', 'student'];
+             data.role in ['admin', 'professor', 'assistant', 'student', 'administrador', 'aluno', 'ajudante', 'sensei'];
     }
 
     function isValidProfile(data) {
       return data.keys().hasAll(['fullName', 'role']) &&
              data.fullName is string && data.fullName.size() <= 200 &&
-             data.role in ['admin', 'professor', 'assistant', 'student'];
+             data.role in ['admin', 'professor', 'assistant', 'student', 'administrador', 'aluno', 'ajudante', 'sensei'];
     }
 
     function isValidClass(data) {
@@ -150,8 +156,7 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if isAdmin() && isValidUser(incoming());
-      allow update: if (isAdmin() || isOwner(userId)) && isValidUser(incoming());
+      allow create, update: if isSignedIn() && (isAdmin() || isProfessor() || isOwner(userId)) && isValidUser(incoming());
     }
 
     match /auth_resets/{email} {
