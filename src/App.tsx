@@ -91,19 +91,21 @@ function AppContent() {
 
           <div className="flex flex-col gap-3 pt-2">
             <button 
+              type="button"
               onClick={handleCheckApproval}
               disabled={checking}
-              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-3.5 rounded-xl text-xs font-bold transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className="w-full bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 py-3.5 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 touch-manipulation select-none"
             >
-              <RefreshCw className={`w-4 h-4 ${checking ? 'animate-spin' : ''}`} />
-              <span>{checking ? 'Verificando situação...' : 'Verificar Regularização'}</span>
+              <RefreshCw className={`w-4 h-4 pointer-events-none ${checking ? 'animate-spin' : ''}`} />
+              <span className="pointer-events-none">{checking ? 'Verificando situação...' : 'Verificar Regularização'}</span>
             </button>
             <button 
+              type="button"
               onClick={() => auth.signOut()}
-              className="w-full bg-slate-900 hover:bg-slate-800 text-white py-3.5 rounded-xl text-xs font-bold transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white py-3.5 rounded-xl text-xs font-bold transition-colors shadow-lg flex items-center justify-center gap-2 cursor-pointer touch-manipulation select-none"
             >
-              <LogOut className="w-4 h-4" />
-              <span>Sair da Conta</span>
+              <LogOut className="w-4 h-4 pointer-events-none" />
+              <span className="pointer-events-none">Sair da Conta</span>
             </button>
           </div>
         </div>
@@ -117,7 +119,7 @@ function AppContent() {
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 font-sans">
         <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-2xl border border-slate-200 text-center space-y-6">
           <div className="w-20 h-20 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto text-amber-500">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
@@ -128,17 +130,19 @@ function AppContent() {
           <p className="text-sm text-slate-400">Entre em contato com a academia para agilizar o processo.</p>
           <div className="flex flex-col gap-3">
             <button 
+              type="button"
               onClick={handleCheckApproval}
               disabled={checking}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+              className="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white py-4 rounded-xl font-bold transition-colors shadow-lg disabled:opacity-50 cursor-pointer touch-manipulation select-none"
             >
-              {checking ? 'Verificando...' : 'Verificar Aprovação'}
+              <span className="pointer-events-none">{checking ? 'Verificando...' : 'Verificar Aprovação'}</span>
             </button>
             <button 
+              type="button"
               onClick={() => auth.signOut()}
-              className="w-full bg-slate-900 hover:bg-slate-800 text-white py-4 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98] cursor-pointer"
+              className="w-full bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white py-4 rounded-xl font-bold transition-colors shadow-lg cursor-pointer touch-manipulation select-none"
             >
-              Sair da Conta
+              <span className="pointer-events-none">Sair da Conta</span>
             </button>
           </div>
         </div>

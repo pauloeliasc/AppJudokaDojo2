@@ -188,80 +188,86 @@ function StudentHome({
       {/* Quick Navigation Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <button
+          type="button"
           onClick={() => setActiveTab('classes')}
-          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-indigo-300 active:bg-indigo-50/50 transition-colors text-left flex flex-col justify-between group touch-manipulation select-none cursor-pointer"
         >
-          <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-            <Calendar className="w-4 h-4" />
+          <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-2 pointer-events-none">
+            <Calendar className="w-4 h-4 pointer-events-none" />
           </div>
-          <div>
-            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-indigo-600 transition-colors">Agenda</span>
-            <span className="text-[10px] text-slate-400 font-medium">Horários e treinos</span>
+          <div className="pointer-events-none">
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-indigo-600 transition-colors pointer-events-none">Agenda</span>
+            <span className="text-[10px] text-slate-400 font-medium pointer-events-none">Horários e treinos</span>
           </div>
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('graduation')}
-          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-indigo-300 active:bg-amber-50/50 transition-colors text-left flex flex-col justify-between group touch-manipulation select-none cursor-pointer"
         >
-          <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-            <GraduationCap className="w-4 h-4" />
+          <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-2 pointer-events-none">
+            <GraduationCap className="w-4 h-4 pointer-events-none" />
           </div>
-          <div>
-            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-amber-600 transition-colors">Graduação</span>
-            <span className="text-[10px] text-slate-400 font-medium">Exames de faixa</span>
+          <div className="pointer-events-none">
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-amber-600 transition-colors pointer-events-none">Graduação</span>
+            <span className="text-[10px] text-slate-400 font-medium pointer-events-none">Exames de faixa</span>
           </div>
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('ranking')}
-          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-indigo-300 active:bg-rose-50/50 transition-colors text-left flex flex-col justify-between group touch-manipulation select-none cursor-pointer"
         >
-          <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-            <Trophy className="w-4 h-4" />
+          <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mb-2 pointer-events-none">
+            <Trophy className="w-4 h-4 pointer-events-none" />
           </div>
-          <div>
-            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-rose-600 transition-colors">Conquistas</span>
-            <span className="text-[10px] text-slate-400 font-medium">Ranking & medalhas</span>
+          <div className="pointer-events-none">
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-rose-600 transition-colors pointer-events-none">Conquistas</span>
+            <span className="text-[10px] text-slate-400 font-medium pointer-events-none">Ranking & medalhas</span>
           </div>
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('events')}
-          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-indigo-300 active:bg-purple-50/50 transition-colors text-left flex flex-col justify-between group touch-manipulation select-none cursor-pointer"
         >
-          <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-            <Megaphone className="w-4 h-4" />
+          <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-2 pointer-events-none">
+            <Megaphone className="w-4 h-4 pointer-events-none" />
           </div>
-          <div>
-            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-purple-600 transition-colors">Eventos</span>
-            <span className="text-[10px] text-slate-400 font-medium">Mural e avisos</span>
+          <div className="pointer-events-none">
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-purple-600 transition-colors pointer-events-none">Eventos</span>
+            <span className="text-[10px] text-slate-400 font-medium pointer-events-none">Mural e avisos</span>
           </div>
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('family')}
-          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-indigo-300 active:bg-emerald-50/50 transition-colors text-left flex flex-col justify-between group touch-manipulation select-none cursor-pointer"
         >
-          <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-            <Users className="w-4 h-4" />
+          <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-2 pointer-events-none">
+            <Users className="w-4 h-4 pointer-events-none" />
           </div>
-          <div>
-            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-emerald-600 transition-colors">Família</span>
-            <span className="text-[10px] text-slate-400 font-medium">Dependentes</span>
+          <div className="pointer-events-none">
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-emerald-600 transition-colors pointer-events-none">Família</span>
+            <span className="text-[10px] text-slate-400 font-medium pointer-events-none">Dependentes</span>
           </div>
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('history')}
-          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-indigo-300 active:bg-blue-50/50 transition-colors text-left flex flex-col justify-between group touch-manipulation select-none cursor-pointer"
         >
-          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-            <Clock className="w-4 h-4" />
+          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-2 pointer-events-none">
+            <Clock className="w-4 h-4 pointer-events-none" />
           </div>
-          <div>
-            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-blue-600 transition-colors">Histórico</span>
-            <span className="text-[10px] text-slate-400 font-medium">Todas presenças</span>
+          <div className="pointer-events-none">
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-blue-600 transition-colors pointer-events-none">Histórico</span>
+            <span className="text-[10px] text-slate-400 font-medium pointer-events-none">Todas presenças</span>
           </div>
         </button>
       </div>
