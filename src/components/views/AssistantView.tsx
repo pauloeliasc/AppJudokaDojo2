@@ -157,56 +157,59 @@ function AssistantHome({
 
       {/* Quick Action Banner */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div 
+        <button 
+          type="button"
           onClick={() => setActiveTab('members')}
-          className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer group flex items-center justify-between"
+          className="w-full text-left bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-indigo-400 active:bg-slate-50 transition-all cursor-pointer group flex items-center justify-between touch-manipulation select-none"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-105 transition-transform">
-              <UserPlus className="w-5 h-5" />
+            <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+              <UserPlus className="w-5 h-5 pointer-events-none" />
             </div>
             <div>
-              <h4 className="font-bold text-sm text-slate-900 group-hover:text-indigo-600 transition-colors">Cadastrar Alunos</h4>
-              <p className="text-[11px] text-slate-400 font-medium">Adicione novos membros ao Dojô</p>
+              <h4 className="font-bold text-sm text-slate-900 group-hover:text-indigo-600 transition-colors pointer-events-none">Cadastrar Alunos</h4>
+              <p className="text-[11px] text-slate-400 font-medium pointer-events-none">Adicione novos membros ao Dojô</p>
             </div>
           </div>
-          <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
-        </div>
+          <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 transition-all pointer-events-none shrink-0" />
+        </button>
 
-        <div 
+        <button 
+          type="button"
           onClick={() => {
             const el = document.getElementById('today-classes-section');
             if (el) el.scrollIntoView({ behavior: 'smooth' });
           }}
-          className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer group flex items-center justify-between"
+          className="w-full text-left bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-emerald-400 active:bg-slate-50 transition-all cursor-pointer group flex items-center justify-between touch-manipulation select-none"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-105 transition-transform">
-              <CheckCircle2 className="w-5 h-5" />
+            <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-5 h-5 pointer-events-none" />
             </div>
             <div>
-              <h4 className="font-bold text-sm text-slate-900 group-hover:text-emerald-600 transition-colors">Chamada & Presenças</h4>
-              <p className="text-[11px] text-slate-400 font-medium">Registrar alunos e retroativos</p>
+              <h4 className="font-bold text-sm text-slate-900 group-hover:text-emerald-600 transition-colors pointer-events-none">Chamada & Presenças</h4>
+              <p className="text-[11px] text-slate-400 font-medium pointer-events-none">Registrar alunos e retroativos</p>
             </div>
           </div>
-          <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all" />
-        </div>
+          <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-600 transition-all pointer-events-none shrink-0" />
+        </button>
 
-        <div 
+        <button 
+          type="button"
           onClick={() => setActiveTab('classes')}
-          className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer group flex items-center justify-between sm:col-span-2 lg:col-span-1"
+          className="w-full text-left bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-indigo-400 active:bg-slate-50 transition-all cursor-pointer group flex items-center justify-between sm:col-span-2 lg:col-span-1 touch-manipulation select-none"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-105 transition-transform">
-              <Calendar className="w-5 h-5" />
+            <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+              <Calendar className="w-5 h-5 pointer-events-none" />
             </div>
             <div>
-              <h4 className="font-bold text-sm text-slate-900 group-hover:text-indigo-600 transition-colors">Grade de Horários</h4>
-              <p className="text-[11px] text-slate-400 font-medium">Consultar agenda dos treinos</p>
+              <h4 className="font-bold text-sm text-slate-900 group-hover:text-indigo-600 transition-colors pointer-events-none">Grade de Horários</h4>
+              <p className="text-[11px] text-slate-400 font-medium pointer-events-none">Consultar agenda dos treinos</p>
             </div>
           </div>
-          <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
-        </div>
+          <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 transition-all pointer-events-none shrink-0" />
+        </button>
       </div>
 
       {/* Stats Summary */}

@@ -3,18 +3,15 @@ import { auth, db, doc } from '../lib/firebase';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
-  sendPasswordResetEmail, 
-  GoogleAuthProvider, 
-  OAuthProvider, 
-  signInWithPopup 
+  sendPasswordResetEmail 
 } from 'firebase/auth';
-import { setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { setDoc, getDoc, getDocs, collection, query, where } from 'firebase/firestore';
 import { UserRole } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   User as UserIcon, Lock, Shield, GraduationCap, Users, Fingerprint, 
   Mail, Eye, EyeOff, CheckCircle2, AlertCircle, ArrowRight,
-  Smartphone, Monitor, HelpCircle, X
+  Smartphone, Monitor, HelpCircle, X, Download, MessageCircle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { authenticateWithBiometrics, isBiometricsSupported, hasRegisteredBiometrics } from '../services/biometricService';
@@ -51,47 +48,148 @@ export default function Login() {
   const [hasBiometrics, setHasBiometrics] = useState(false);
   const [showBiometricPrompt, setShowBiometricPrompt] = useState(false);
 
+  // Android / PWA Install Prompt state
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isStandalone, setIsStandalone] = useState(false);
+
   useEffect(() => {
-    isBiometricsSupported().then(setBiometricSupported);
-    setHasBiometrics(hasRegisteredBiometrics());
+    isBiometricsSupported().then(setBiometricSupported).catch(() => setBiometricSupported(false));
+    try {
+      setHasBiometrics(hasRegisteredBiometrics());
+    } catch {
+      setHasBiometrics(false);
+    }
+
+    // Check if already in standalone PWA / Android WebAPK
+    const standaloneMode = 
+      window.matchMedia('(display-mode: standalone)').matches || 
+      (window.navigator as any).standalone === true;
+    setIsStandalone(standaloneMode);
+
+    // Capture beforeinstallprompt for Android PWA 1-tap install
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
   }, []);
 
-  // Standard Login
+  const handleInstallPWA = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
+
+  // Helper to find email if user typed username or name
+  const resolveLoginEmail = async (input: string): Promise<string> => {
+    const trimmed = input.trim().toLowerCase();
+    if (trimmed.includes('@')) {
+      return trimmed;
+    }
+
+    // Try finding by username
+    try {
+      const qUser = query(collection(db, 'profiles'), where('username', '==', trimmed));
+      const snapUser = await getDocs(qUser);
+      if (!snapUser.empty && snapUser.docs[0].data().email) {
+        return snapUser.docs[0].data().email.toLowerCase().trim();
+      }
+
+      // Try finding by exact fullName (case-insensitive simulation)
+      const qName = query(collection(db, 'profiles'), where('fullName', '==', input.trim()));
+      const snapName = await getDocs(qName);
+      if (!snapName.empty && snapName.docs[0].data().email) {
+        return snapName.docs[0].data().email.toLowerCase().trim();
+      }
+    } catch (err) {
+      console.warn("Could not lookup user profile by nickname:", err);
+    }
+
+    return trimmed;
+  };
+
+  // Standard Login (Optimized for Android & Web)
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     setMessage('');
 
-    const emailLower = username.trim().toLowerCase();
+    if (!navigator.onLine) {
+      setError('Você parece estar sem conexão à internet. Verifique seu Wi-Fi ou dados móveis.');
+      setLoading(false);
+      return;
+    }
+
+    const rawInput = username.trim();
+    if (!rawInput) {
+      setError('Por favor, informe seu e-mail ou nome de usuário.');
+      setLoading(false);
+      return;
+    }
+
+    const resolvedEmail = await resolveLoginEmail(rawInput);
 
     // Check if there is an active reset email mapping (so students with reset passwords can login)
-    let loginEmail = emailLower;
+    let loginEmail = resolvedEmail;
     try {
-      const resetSnap = await getDoc(doc(db, 'auth_resets', emailLower));
+      const resetSnap = await getDoc(doc(db, 'auth_resets', resolvedEmail));
       if (resetSnap.exists()) {
         loginEmail = resetSnap.data().resetAuthEmail;
       }
-    } catch (e) {
-      console.warn("Could not check auth_resets mapping:", e);
+    } catch (err) {
+      console.warn("Could not check auth_resets mapping:", err);
     }
 
     try {
       await signInWithEmailAndPassword(auth, loginEmail, password);
     } catch (e: any) {
-      console.log("Auth login attempt notice:", e.message || e);
-      const code = e.code || (e.message?.includes('auth/invalid-credential') ? 'auth/invalid-credential' : '');
+      console.log("Auth login attempt notice:", e.code || e.message);
+      const code = e.code || '';
       
-      if (code === 'auth/operation-not-allowed') {
-        setError('Erro: O provedor de E-mail/Senha não está ativo no Console do Firebase.');
-      } else if (code === 'auth/invalid-credential' || code === 'auth/user-not-found' || code === 'auth/wrong-password') {
-        setError('E-mail ou senha incorretos. Caso seja seu primeiro acesso ou não tenha senha, use a aba "Criar Conta" ou solicite a redefinição.');
+      // Auto-activation for students created by Sensei in profiles who haven't initialized Auth yet
+      if (code === 'auth/invalid-credential' || code === 'auth/user-not-found' || code === 'auth/wrong-password') {
+        try {
+          // Check if profile exists with this email
+          const q = query(collection(db, 'profiles'), where('email', '==', loginEmail));
+          const qSnap = await getDocs(q);
+          if (!qSnap.empty) {
+            const prof = qSnap.docs[0].data();
+            // Attempt to provision Auth credentials if this was their first access
+            try {
+              const newAuth = await createUserWithEmailAndPassword(auth, loginEmail, password);
+              const newUid = newAuth.user.uid;
+              await setDoc(doc(db, 'profiles', qSnap.docs[0].id), { userId: newUid }, { merge: true });
+              await setDoc(doc(db, 'users', newUid), { role: prof.role || 'student' }, { merge: true });
+              setMessage('Primeiro acesso configurado com sucesso! Entrando...');
+              return;
+            } catch (createErr: any) {
+              // If createUser fails because email already exists, it was truly a wrong password
+              console.warn("Activation check fallback:", createErr.code);
+            }
+          }
+        } catch (checkErr) {
+          console.warn("Profile check on login failed:", checkErr);
+        }
+
+        setError('E-mail ou senha incorretos. Caso seja seu primeiro acesso no Dojô, solicite sua senha ao professor ou use a opção "Esqueceu a senha?".');
+      } else if (code === 'auth/operation-not-allowed') {
+        setError('Erro de configuração: Autenticação por e-mail/senha não habilitada no Firebase.');
       } else if (code === 'auth/invalid-email') {
-        setError('Por favor, insira um e-mail válido.');
+        setError('Por favor, informe um e-mail válido (ex: seu@email.com).');
       } else if (code === 'auth/too-many-requests') {
-        setError('Muitas tentativas malsucedidas. Aguarde alguns minutos ou redefina sua senha.');
+        setError('Muitas tentativas sem sucesso. Aguarde alguns instantes ou redefina sua senha.');
+      } else if (code === 'auth/network-request-failed') {
+        setError('Falha de conexão com os servidores. Verifique sua rede e tente novamente.');
       } else {
-        setError('Erro no acesso: ' + (e.message || 'Dados inválidos.'));
+        setError('Erro ao entrar: ' + (e.message || 'Verifique seus dados.'));
       }
     } finally {
       setLoading(false);
@@ -174,7 +272,7 @@ export default function Login() {
     } catch (e: any) {
       console.error("Register error:", e);
       if (e.code === 'auth/email-already-in-use') {
-        setError('Este e-mail já possui conta cadastrada. Tente fazer login ou redefinir a senha.');
+        setError('Este e-mail já possui conta cadastrada. Tente fazer login ou clique em "Esqueceu a senha?".');
       } else if (e.code === 'auth/weak-password') {
         setError('A senha informada é fraca. Use pelo menos 6 caracteres.');
       } else {
@@ -234,26 +332,44 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4 sm:p-6 font-sans relative overflow-hidden">
+    <div className="min-h-[100dvh] flex items-center justify-center bg-slate-900 p-4 sm:p-6 font-sans relative overflow-hidden select-none">
       {/* Background Japanese Calligraphy Accent */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-slate-800/20 text-[20rem] font-black select-none pointer-events-none tracking-widest">
         柔道
       </div>
 
       <motion.div 
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-white rounded-3xl overflow-hidden shadow-2xl border border-slate-800 z-10 my-4"
+        transition={{ duration: 0.3 }}
+        className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-100 relative z-10 my-4"
       >
-        <div className="p-6 sm:p-8">
+        {/* Android PWA Install Banner when available */}
+        {deferredPrompt && !isStandalone && (
+          <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-4 py-3 flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <Smartphone className="w-4 h-4 shrink-0 text-amber-300" />
+              <span className="font-bold truncate">Instalar App no seu Android</span>
+            </div>
+            <button
+              onClick={handleInstallPWA}
+              className="bg-white text-indigo-700 px-3 py-1.5 rounded-xl font-extrabold text-[11px] uppercase tracking-wider shrink-0 hover:bg-indigo-50 active:scale-95 transition-all shadow-xs cursor-pointer flex items-center gap-1"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Instalar</span>
+            </button>
+          </div>
+        )}
+
+        <div className="p-7 sm:p-9">
           {/* Logo & Header */}
-          <div className="flex justify-center mb-6">
-            <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center shadow-lg border border-slate-100 overflow-hidden shrink-0">
+          <div className="flex justify-center mb-4">
+            <div className="w-20 h-20 bg-slate-50 border border-slate-200/80 rounded-3xl flex items-center justify-center shadow-md p-2">
               <img 
-                src="./logo.png" 
+                src="/logo.png" 
                 alt="Judoka Dojô" 
-                className="w-18 h-18 object-contain"
-                referrerPolicy="no-referrer"
+                className="w-16 h-16 object-contain"
+                loading="eager"
               />
             </div>
           </div>
@@ -301,16 +417,16 @@ export default function Login() {
 
           {/* Error / Success Feedback */}
           {error && (
-            <div className="mt-4 p-3.5 rounded-2xl text-xs font-bold text-center border bg-rose-50 text-rose-700 border-rose-200 flex items-center gap-2">
+            <div className="mt-4 p-3.5 rounded-2xl text-xs font-bold text-center border bg-rose-50 text-rose-700 border-rose-200 flex items-center gap-2 animate-in fade-in duration-200">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="flex-1">{error}</span>
+              <span className="flex-1 text-left">{error}</span>
             </div>
           )}
           
           {message && (
-            <div className="mt-4 p-3.5 rounded-2xl text-xs font-bold text-center border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-2">
+            <div className="mt-4 p-3.5 rounded-2xl text-xs font-bold text-center border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-2 animate-in fade-in duration-200">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span className="flex-1">{message}</span>
+              <span className="flex-1 text-left">{message}</span>
             </div>
           )}
 
@@ -319,16 +435,21 @@ export default function Login() {
             <form onSubmit={handleLogin} className="mt-6 space-y-4">
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 block ml-1">
-                  E-mail
+                  E-mail ou Usuário
                 </label>
                 <div className="relative">
                   <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input 
-                    type="email"
+                    type="text"
+                    inputMode="email"
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 pl-10 pr-4 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-base transition-all font-medium text-slate-800"
-                    placeholder="seu@email.com"
+                    placeholder="seu@email.com ou nome"
                     required
                   />
                 </div>
@@ -356,6 +477,7 @@ export default function Login() {
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input 
                     type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 pl-10 pr-11 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-base transition-all font-medium text-slate-800"
@@ -377,7 +499,7 @@ export default function Login() {
                 disabled={loading}
                 className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-2xl font-black text-sm tracking-wide transition-all shadow-md shadow-indigo-600/20 active:scale-[0.98] disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2 mt-2"
               >
-                {loading ? 'Entrando...' : 'Entrar no Sistema'}
+                {loading ? 'Entrando no Dojô...' : 'Entrar no Sistema'}
                 <ArrowRight className="w-4 h-4" />
               </button>
 
@@ -402,6 +524,7 @@ export default function Login() {
                 </label>
                 <input 
                   type="text"
+                  autoComplete="name"
                   value={registerName}
                   onChange={(e) => setRegisterName(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-base transition-all font-medium text-slate-800"
@@ -416,6 +539,11 @@ export default function Login() {
                 </label>
                 <input 
                   type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   value={registerEmail}
                   onChange={(e) => setRegisterEmail(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-base transition-all font-medium text-slate-800"
@@ -431,6 +559,7 @@ export default function Login() {
                 <div className="relative">
                   <input 
                     type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
                     value={registerPassword}
                     onChange={(e) => setRegisterPassword(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 pl-4 pr-11 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-base transition-all font-medium text-slate-800"
@@ -450,28 +579,28 @@ export default function Login() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 block ml-1">
-                    Tipo de Acesso
+                    Função no Dojô
                   </label>
                   <select
                     value={registerRole}
                     onChange={(e) => setRegisterRole(e.target.value as UserRole)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-3 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-3 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-xs transition-all font-bold text-slate-800"
                   >
                     <option value={UserRole.STUDENT}>🥋 Aluno</option>
                     <option value={UserRole.ASSISTANT}>🥋 Ajudante</option>
-                    <option value={UserRole.PROFESSOR}>🥋 Professor / Sensei</option>
+                    <option value={UserRole.PROFESSOR}>🥋 Professor</option>
                     <option value={UserRole.ADMIN}>🛡️ Administrador</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 block ml-1">
-                    Faixa de Judô
+                    Faixa Atual
                   </label>
                   <select
                     value={registerBelt}
                     onChange={(e) => setRegisterBelt(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-3 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-3 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-xs transition-all font-bold text-slate-800"
                   >
                     <option value="Branca">Branca</option>
                     <option value="Cinza">Cinza</option>
@@ -497,11 +626,17 @@ export default function Login() {
             </form>
           )}
 
-          {/* Cross-Platform Badge Notice */}
-          <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-center gap-2 text-[11px] text-slate-400 font-semibold text-center">
-            <Smartphone className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-            <Monitor className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-            <span>Compatível com Android, iOS (iPhone/iPad) e Computador</span>
+          {/* Cross-Platform & Device Support Notice */}
+          <div className="mt-6 pt-4 border-t border-slate-100 flex flex-col items-center gap-2 text-center">
+            <div className="flex items-center justify-center gap-2 text-[11px] text-slate-400 font-semibold">
+              <Smartphone className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+              <Monitor className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+              <span>Otimizado para Android, iOS (iPhone/iPad) e PC</span>
+            </div>
+            
+            <p className="text-[10px] text-slate-400">
+              Primeiro acesso de aluno? Sua senha inicial é geralmente <span className="font-mono font-bold text-slate-600">123456</span>
+            </p>
           </div>
         </div>
       </motion.div>
@@ -524,7 +659,7 @@ export default function Login() {
             </div>
 
             <p className="text-xs text-slate-500 font-medium">
-              Informe seu e-mail cadastrado. Enviaremos um link de recuperação diretamente para sua caixa de entrada.
+              Informe seu e-mail cadastrado. Enviaremos um link oficial para redefinir sua senha com segurança.
             </p>
 
             {forgotStatus === 'success' ? (
@@ -536,7 +671,7 @@ export default function Login() {
                 </p>
                 <button
                   onClick={() => setShowForgotModal(false)}
-                  className="mt-2 w-full py-2 bg-emerald-600 text-white rounded-xl font-bold"
+                  className="mt-2 w-full py-2.5 bg-emerald-600 text-white rounded-xl font-bold cursor-pointer"
                 >
                   Voltar ao Login
                 </button>
@@ -555,6 +690,9 @@ export default function Login() {
                   </label>
                   <input
                     type="email"
+                    inputMode="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
                     value={forgotEmail}
                     onChange={(e) => setForgotEmail(e.target.value)}
                     placeholder="aluno@email.com"
@@ -567,14 +705,14 @@ export default function Login() {
                   <button
                     type="button"
                     onClick={() => setShowForgotModal(false)}
-                    className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100"
+                    className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
                     disabled={forgotStatus === 'loading'}
-                    className="px-4 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm disabled:opacity-50"
+                    className="px-4 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm disabled:opacity-50 cursor-pointer"
                   >
                     {forgotStatus === 'loading' ? 'Enviando...' : 'Enviar Link'}
                   </button>

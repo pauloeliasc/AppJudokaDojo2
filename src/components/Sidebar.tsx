@@ -50,16 +50,17 @@ export default function Sidebar({ role, activeTab, setActiveTab, logout, userNam
           {filteredItems.map((item) => (
             <button
               key={item.id}
+              type="button"
               onClick={() => setActiveTab(item.id)}
               className={cn(
-                "w-full flex lg:flex-row flex-col items-center gap-1 lg:gap-3 px-1 lg:px-4 py-3 rounded-lg font-medium transition-all group",
+                "w-full flex lg:flex-row flex-col items-center gap-1 lg:gap-3 px-1 lg:px-4 py-3 rounded-xl font-medium transition-all group touch-manipulation select-none cursor-pointer",
                 activeTab === item.id 
-                  ? "bg-white/10 text-white" 
+                  ? "bg-white/10 text-white font-bold" 
                   : "text-slate-400 hover:bg-white/5 hover:text-white"
               )}
             >
-              <item.icon className={cn("w-5 h-5 shrink-0", activeTab === item.id ? "text-indigo-400" : "group-hover:scale-110 transition-transform")} />
-              <span className="text-[9px] lg:text-sm font-bold lg:font-medium whitespace-nowrap overflow-hidden text-center lg:text-left w-full lg:w-auto">
+              <item.icon className={cn("w-5 h-5 shrink-0 pointer-events-none", activeTab === item.id ? "text-indigo-400" : "")} />
+              <span className="text-[9px] lg:text-sm font-bold lg:font-medium whitespace-nowrap overflow-hidden text-center lg:text-left w-full lg:w-auto pointer-events-none">
                 {item.label}
               </span>
             </button>
@@ -67,7 +68,7 @@ export default function Sidebar({ role, activeTab, setActiveTab, logout, userNam
         </nav>
 
         <div className="mt-auto px-2 lg:px-6 pt-6 border-t border-white/5 space-y-4">
-          <div className="flex flex-col lg:flex-row items-center gap-1 lg:gap-3">
+          <div className="flex flex-col lg:flex-row items-center gap-1 lg:gap-3 select-none">
             <div className="w-8 h-8 lg:w-10 lg:h-10 bg-white/10 rounded-full flex items-center justify-center font-bold text-xs lg:text-sm shrink-0">
               {userName.charAt(0)}
             </div>
@@ -79,11 +80,12 @@ export default function Sidebar({ role, activeTab, setActiveTab, logout, userNam
             </div>
           </div>
           <button 
+            type="button"
             onClick={logout}
-            className="w-full flex lg:flex-row flex-col items-center gap-1 lg:gap-3 px-1 lg:px-4 py-3 rounded-lg font-bold text-rose-400 hover:bg-rose-500/10 transition-all"
+            className="w-full flex lg:flex-row flex-col items-center gap-1 lg:gap-3 px-1 lg:px-4 py-3 rounded-xl font-bold text-rose-400 hover:bg-rose-500/10 active:bg-rose-500/20 transition-all touch-manipulation select-none cursor-pointer"
           >
-            <LogOut className="w-4 h-4 lg:w-5 lg:h-5 shrink-0" />
-            <span className="text-[9px] lg:text-sm">Sair</span>
+            <LogOut className="w-4 h-4 lg:w-5 lg:h-5 shrink-0 pointer-events-none" />
+            <span className="text-[9px] lg:text-sm pointer-events-none">Sair</span>
           </button>
         </div>
       </div>

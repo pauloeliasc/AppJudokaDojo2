@@ -1,14 +1,150 @@
-import React from 'react';
+import React, { Component, ErrorInfo, ReactNode, useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './AuthContext';
 import { auth } from './lib/firebase';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import { UserRole } from './types';
-import { ShieldAlert, Users, PhoneCall, LogOut, RefreshCw, AlertOctagon } from 'lucide-react';
+import { ShieldAlert, Users, PhoneCall, LogOut, RefreshCw, AlertOctagon, RotateCcw, WifiOff } from 'lucide-react';
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  errorMessage: string;
+}
+
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  props: ErrorBoundaryProps;
+  state: ErrorBoundaryState = { hasError: false, errorMessage: '' };
+
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.props = props;
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, errorMessage: error.message || 'Erro desconhecido' };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("ErrorBoundary capturou erro na interface:", error, errorInfo);
+  }
+
+  handleHardReset = async () => {
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch (e) {
+      console.warn("Reset error:", e);
+    }
+    window.location.href = '/';
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-slate-800 border border-slate-700 rounded-3xl p-6 sm:p-8 text-center space-y-4 shadow-2xl">
+            <div className="w-16 h-16 bg-rose-500/10 text-rose-500 rounded-2xl flex items-center justify-center mx-auto">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+            <h1 className="text-xl font-black text-white">Ops! Algo não carregou corretamente</h1>
+            <p className="text-xs text-slate-400">
+              O aplicativo encontrou uma falha temporária. Você pode recarregar ou limpar os dados locais em cache para voltar ao normal.
+            </p>
+            <div className="pt-2 space-y-2">
+              <button
+                onClick={() => window.location.reload()}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Recarregar Aplicativo
+              </button>
+              <button
+                onClick={this.handleHardReset}
+                className="w-full bg-slate-700 hover:bg-slate-600 text-slate-300 py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Limpar Cache e Reiniciar
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function LoadingScreen({ logout }: { logout: () => Promise<void> }) {
+  const [showRescue, setShowRescue] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowRescue(true);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 px-4 text-center select-none">
+      <div className="relative mb-6">
+        <div className="w-20 h-20 rounded-3xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center shadow-xl animate-pulse">
+          <img src="/logo.png" alt="Judoka Dojô" className="w-14 h-14 object-contain" />
+        </div>
+        <div className="absolute -inset-1 rounded-3xl border-2 border-indigo-500/40 animate-ping opacity-25"></div>
+      </div>
+
+      <h2 className="text-lg font-black text-white tracking-wide mb-1">Judoka Dojô</h2>
+      <p className="text-xs font-semibold text-slate-400 mb-6 flex items-center gap-2">
+        <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping"></span>
+        Iniciando aplicativo...
+      </p>
+
+      {showRescue && (
+        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-2 max-w-xs w-full bg-slate-800/80 border border-slate-700/80 p-4 rounded-2xl">
+          <p className="text-[11px] text-slate-400 font-medium">A conexão está demorando?</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => window.location.reload()}
+              className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-2 rounded-xl transition-all cursor-pointer"
+            >
+              Recarregar
+            </button>
+            <button
+              onClick={() => logout()}
+              className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold py-2 rounded-xl transition-all cursor-pointer"
+            >
+              Trocar Conta
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function AppContent() {
-  const { user, loading, refreshUser, activeProfile, availableProfiles, setActiveProfileId, activeProfileId } = useAuth();
+  const { user, loading, refreshUser, activeProfile, availableProfiles, setActiveProfileId, activeProfileId, logout } = useAuth();
   const [checking, setChecking] = React.useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const handleCheckApproval = async () => {
     setChecking(true);
@@ -17,15 +153,21 @@ function AppContent() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f5f5f4]">
-        <div className="w-12 h-12 border-4 border-[#0a0a0a] border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
+    return <LoadingScreen logout={logout} />;
   }
 
   if (!user) {
-    return <Login />;
+    return (
+      <>
+        {isOffline && (
+          <div className="bg-amber-500 text-amber-950 text-xs font-bold py-1.5 px-4 text-center flex items-center justify-center gap-1.5 sticky top-0 z-50">
+            <WifiOff className="w-3.5 h-3.5" />
+            <span>Dispositivo sem conexão à internet no momento</span>
+          </div>
+        )}
+        <Login />
+      </>
+    );
   }
 
   const isAdmin = user.role === UserRole.ADMIN;
@@ -98,9 +240,10 @@ function AppContent() {
               <RefreshCw className={`w-4 h-4 ${checking ? 'animate-spin' : ''}`} />
               <span>{checking ? 'Verificando situação...' : 'Verificar Regularização'}</span>
             </button>
+
             <button 
-              onClick={() => auth.signOut()}
-              className="w-full bg-slate-900 hover:bg-slate-800 text-white py-3.5 rounded-xl text-xs font-bold transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+              onClick={logout}
+              className="w-full bg-rose-50 hover:bg-rose-100 text-rose-700 py-3.5 rounded-xl text-xs font-bold transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
               <span>Sair da Conta</span>
@@ -111,48 +254,25 @@ function AppContent() {
     );
   }
 
-  // Screen for Pending Approval
-  if (!user.isApproved) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 font-sans">
-        <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-2xl border border-slate-200 text-center space-y-6">
-          <div className="w-20 h-20 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto text-amber-500">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Aprovação Pendente</h1>
-            <p className="text-slate-500 mt-2">Olá, {user.name}! Sua conta foi criada, mas ainda aguarda aprovação de um administrador.</p>
-          </div>
-          <p className="text-sm text-slate-400">Entre em contato com a academia para agilizar o processo.</p>
-          <div className="flex flex-col gap-3">
-            <button 
-              onClick={handleCheckApproval}
-              disabled={checking}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 cursor-pointer"
-            >
-              {checking ? 'Verificando...' : 'Verificar Aprovação'}
-            </button>
-            <button 
-              onClick={() => auth.signOut()}
-              className="w-full bg-slate-900 hover:bg-slate-800 text-white py-4 rounded-xl font-bold transition-all shadow-lg active:scale-[0.98] cursor-pointer"
-            >
-              Sair da Conta
-            </button>
-          </div>
+  return (
+    <>
+      {isOffline && (
+        <div className="bg-amber-500 text-amber-950 text-xs font-bold py-1.5 px-4 text-center flex items-center justify-center gap-1.5 sticky top-0 z-50">
+          <WifiOff className="w-3.5 h-3.5" />
+          <span>Operando em modo offline. As alterações serão sincronizadas quando houver sinal.</span>
         </div>
-      </div>
-    );
-  }
-
-  return <Dashboard />;
+      )}
+      <Dashboard />
+    </>
+  );
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

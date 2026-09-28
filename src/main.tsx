@@ -9,35 +9,46 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 );
 
-// Register Service Worker for PWA support (only in production)
+// Service Worker Registration & Smooth Update lifecycle
 if ('serviceWorker' in navigator) {
-  if ((import.meta as any).env?.PROD) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js')
-        .then((reg) => {
-          console.log('Service Worker registrado com sucesso:', reg.scope);
-        })
-        .catch((err) => {
-          console.error('Falha ao registrar Service Worker:', err);
-        });
-    });
-  } else {
-    // In development, actively unregister any existing service workers to prevent stale cache issues
-    navigator.serviceWorker.getRegistrations().then((registrations) => {
-      for (const registration of registrations) {
-        registration.unregister().then((success) => {
-          if (success) {
-            console.log('Service Worker antigo desregistrado com sucesso no ambiente de desenvolvimento.');
-            // Clear caches to force a fresh fetch of all dev modules without forcing a reload loops
-            caches.keys().then((keys) => {
-              for (const key of keys) {
-                caches.delete(key);
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then((reg) => {
+        // Listen for new version updates in background
+        reg.onupdatefound = () => {
+          const installingWorker = reg.installing;
+          if (installingWorker) {
+            installingWorker.onstatechange = () => {
+              if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                installingWorker.postMessage({ type: 'SKIP_WAITING' });
               }
-            });
+            };
           }
-        });
-      }
-    });
-  }
+        };
+      })
+      .catch((err) => {
+        console.warn('Aviso Service Worker:', err);
+      });
+  });
+
+  // Reload page smoothly when the new Service Worker activates to prevent stale code
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing) {
+      refreshing = true;
+      window.location.reload();
+    }
+  });
 }
 
+// Global self-healing for chunk mismatch errors when app is updated on Android/iOS
+window.addEventListener('error', (e) => {
+  if (e.message && (e.message.includes('Loading chunk') || e.message.includes('dynamically imported module') || e.message.includes('Failed to fetch'))) {
+    console.warn("Detectada versão desatualizada de scripts em cache. Atualizando página...");
+    const hasReloaded = sessionStorage.getItem('chunk_reloaded');
+    if (!hasReloaded) {
+      sessionStorage.setItem('chunk_reloaded', '1');
+      window.location.reload();
+    }
+  }
+});

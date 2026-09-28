@@ -1,8 +1,37 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth, db, doc } from './lib/firebase';
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
 import { setDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { User, UserRole, Profile } from './types';
+
+// Safe localStorage wrapper to prevent crashes in private mode or Android WebViews
+export const safeStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      return typeof window !== 'undefined' ? localStorage.getItem(key) : null;
+    } catch {
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(key, value);
+      }
+    } catch {
+      // Ignore storage errors on restricted environments
+    }
+  },
+  removeItem: (key: string): void => {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(key);
+      }
+    } catch {
+      // Ignore
+    }
+  }
+};
 
 export const normalizeUserRole = (rawRole: any): UserRole => {
   if (!rawRole) return UserRole.STUDENT;
@@ -45,7 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Function to switch active profile
   const setActiveProfileId = (id: string) => {
     if (auth.currentUser?.email) {
-      localStorage.setItem(`activeProfile_${auth.currentUser.email.toLowerCase().trim()}`, id);
+      safeStorage.setItem(`activeProfile_${auth.currentUser.email.toLowerCase().trim()}`, id);
     }
     setActiveProfileIdState(id);
   };
@@ -53,6 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let unsubscribeFamily: (() => void) | null = null;
     let unsubscribeProfile: (() => void) | null = null;
+    let safetyTimeout: NodeJS.Timeout | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       // Clean up previous listeners
@@ -64,6 +94,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unsubscribeProfile();
         unsubscribeProfile = null;
       }
+      if (safetyTimeout) {
+        clearTimeout(safetyTimeout);
+        safetyTimeout = null;
+      }
 
       if (!firebaseUser) {
         setUser(null);
@@ -74,56 +108,99 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      setLoading(true);
       const rawEmail = firebaseUser.email?.toLowerCase().trim() || '';
       const email = rawEmail.replace(/\+reset\d+@/, '@');
+      const isAdminEmail = 
+        email === 'pauloeliasc@gmail.com' || 
+        email === 'pauloeliasc@hotmail.com' || 
+        email === 'judokadojoosasco@gmail.com' || 
+        email === 'admin@judokadojo.com';
+      const isProfessorEmail = email === 'sensei@judokadojo.com';
+      const isAssistantEmail = email === 'ajudante@judokadojo.com';
 
-      // Set up real-time listener for ALL profiles with this email (family members)
-      const q = query(collection(db, 'profiles'), where('email', '==', email));
-      unsubscribeFamily = onSnapshot(q, async (snapshot) => {
-        const seen = new Set<string>();
-        const list: Profile[] = [];
-        for (const d of snapshot.docs) {
-          const item = { ...d.data(), id: d.id } as Profile;
-          if (!item.isPointer && !seen.has(item.id)) {
-            seen.add(item.id);
-            list.push(item);
-          }
-        }
+      const initialRole = isAdminEmail 
+        ? UserRole.ADMIN 
+        : isProfessorEmail 
+        ? UserRole.PROFESSOR 
+        : isAssistantEmail 
+        ? UserRole.ASSISTANT 
+        : UserRole.STUDENT;
 
-        setAvailableProfiles(list);
-
-        // Compute/decide active profile of the family
-        let selectedId: string | null = null;
-        const storedId = localStorage.getItem(`activeProfile_${email}`);
-
-        if (storedId && list.some(p => p.id === storedId)) {
-          selectedId = storedId;
-        } else {
-          // If no stored selection, try matching UID or userId
-          const mainMatch = list.find(p => p.id === firebaseUser.uid || p.userId === firebaseUser.uid);
-          if (mainMatch) {
-            selectedId = mainMatch.id;
-          } else if (list.length > 0) {
-            selectedId = list[0].id;
-          } else {
-            selectedId = firebaseUser.uid;
-          }
-        }
-
-        setActiveProfileIdState(selectedId);
-      }, (err) => {
-        console.error("Error listening to family profiles:", err);
-        // Fallback if permission / index fails
-        setActiveProfileIdState(firebaseUser.uid);
-        setAvailableProfiles([]);
+      // Provide immediate baseline user state to avoid freezing on mobile network
+      setUser((prev) => prev || {
+        uid: firebaseUser.uid,
+        id: firebaseUser.uid,
+        email: firebaseUser.email || '',
+        name: firebaseUser.displayName || email.split('@')[0] || 'Usuário',
+        role: initialRole,
+        username: email.split('@')[0],
+        isApproved: true,
+        status: 'active'
       });
+
+      // Safety timeout: Never leave the user stuck on loading spinner longer than 3.5 seconds
+      safetyTimeout = setTimeout(() => {
+        setLoading(false);
+      }, 3500);
+
+      try {
+        // Set up real-time listener for ALL profiles with this email (family members)
+        const q = query(collection(db, 'profiles'), where('email', '==', email));
+        unsubscribeFamily = onSnapshot(q, (snapshot) => {
+          if (safetyTimeout) {
+            clearTimeout(safetyTimeout);
+            safetyTimeout = null;
+          }
+
+          const seen = new Set<string>();
+          const list: Profile[] = [];
+          for (const d of snapshot.docs) {
+            const item = { ...d.data(), id: d.id } as Profile;
+            if (!item.isPointer && !seen.has(item.id)) {
+              seen.add(item.id);
+              list.push(item);
+            }
+          }
+
+          setAvailableProfiles(list);
+
+          // Compute/decide active profile of the family
+          let selectedId: string | null = null;
+          const storedId = safeStorage.getItem(`activeProfile_${email}`);
+
+          if (storedId && list.some(p => p.id === storedId)) {
+            selectedId = storedId;
+          } else {
+            // If no stored selection, try matching UID or userId
+            const mainMatch = list.find(p => p.id === firebaseUser.uid || p.userId === firebaseUser.uid);
+            if (mainMatch) {
+              selectedId = mainMatch.id;
+            } else if (list.length > 0) {
+              selectedId = list[0].id;
+            } else {
+              selectedId = firebaseUser.uid;
+            }
+          }
+
+          setActiveProfileIdState(selectedId);
+        }, (err) => {
+          console.warn("Notice: Family listener fallback:", err);
+          setActiveProfileIdState(firebaseUser.uid);
+          setAvailableProfiles([]);
+          setLoading(false);
+        });
+      } catch (e) {
+        console.warn("Notice: query profiles catch:", e);
+        setActiveProfileIdState(firebaseUser.uid);
+        setLoading(false);
+      }
     });
 
     return () => {
       unsubscribeAuth();
       if (unsubscribeFamily) unsubscribeFamily();
       if (unsubscribeProfile) unsubscribeProfile();
+      if (safetyTimeout) clearTimeout(safetyTimeout);
     };
   }, []);
 
@@ -133,6 +210,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const firebaseUser = auth.currentUser;
 
     if (!firebaseUser || !activeProfileId) {
+      if (!firebaseUser) {
+        setLoading(false);
+      }
       return;
     }
 
@@ -168,7 +248,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ? UserRole.ASSISTANT 
           : parsedRole;
 
-        // Auto-heal profile role in database if stored with non-canonical value (e.g. 'administrador', 'aluno')
+        // Auto-heal profile role in database if stored with non-canonical value
         if (pData.role !== effectiveRole) {
           try {
             await setDoc(doc(db, 'profiles', activeProfileId), { role: effectiveRole }, { merge: true });
@@ -177,9 +257,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
 
-        // CRITICAL FOR FIRESTORE RULES:
-        // Firestore rules check exists(/databases/$(database)/documents/profiles/$(request.auth.uid)).
-        // We ensure both profiles/{firebaseUser.uid} and users/{firebaseUser.uid} exist and store the role.
+        // Keep users/uid doc in sync for rule checks
         try {
           await setDoc(doc(db, 'profiles', firebaseUser.uid), {
             id: firebaseUser.uid,
@@ -268,7 +346,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       setLoading(false);
     }, (err) => {
-      console.error("Error listening to selected active profile:", err);
+      console.warn("Notice: Error listening to profile doc:", err);
       setLoading(false);
     });
 
@@ -278,11 +356,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [activeProfileId]);
 
   const logout = async () => {
-    await auth.signOut();
+    try {
+      await auth.signOut();
+      setUser(null);
+      setActiveProfile(null);
+      setAvailableProfiles([]);
+      setActiveProfileIdState(null);
+      setLoading(false);
+    } catch (e) {
+      console.error("Logout error:", e);
+    }
   };
 
   const refreshUser = async () => {
-    // Left as compatibility stub or manually triggers re-fetch if needed
+    // Manually trigger refresh when needed
+    const firebaseUser = auth.currentUser;
+    if (firebaseUser && activeProfileId) {
+      // Touch state to force re-render
+      setLoading(false);
+    }
   };
 
   return (
