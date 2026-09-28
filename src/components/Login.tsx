@@ -2,13 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { auth, db, doc } from '../lib/firebase';
 import { 
   signInWithEmailAndPassword, 
-  sendPasswordResetEmail
+  createUserWithEmailAndPassword, 
+  sendPasswordResetEmail, 
+  GoogleAuthProvider, 
+  OAuthProvider, 
+  signInWithPopup 
 } from 'firebase/auth';
-import { getDoc } from 'firebase/firestore';
+import { setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { UserRole } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  User as UserIcon, Lock, Fingerprint, 
-  Eye, EyeOff, CheckCircle2, AlertCircle, ArrowRight,
+  User as UserIcon, Lock, Shield, GraduationCap, Users, Fingerprint, 
+  Mail, Eye, EyeOff, CheckCircle2, AlertCircle, ArrowRight,
   Smartphone, Monitor, HelpCircle, X
 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -16,10 +21,19 @@ import { authenticateWithBiometrics, isBiometricsSupported, hasRegisteredBiometr
 import BiometricPrompt from './modules/BiometricPrompt';
 
 export default function Login() {
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  
   // Login fields
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  // Register fields
+  const [registerName, setRegisterName] = useState('');
+  const [registerEmail, setRegisterEmail] = useState('');
+  const [registerPassword, setRegisterPassword] = useState('');
+  const [registerRole, setRegisterRole] = useState<UserRole>(UserRole.STUDENT);
+  const [registerBelt, setRegisterBelt] = useState('Branca');
 
   // UI state
   const [error, setError] = useState('');
@@ -71,13 +85,100 @@ export default function Login() {
       if (code === 'auth/operation-not-allowed') {
         setError('Erro: O provedor de E-mail/Senha não está ativo no Console do Firebase.');
       } else if (code === 'auth/invalid-credential' || code === 'auth/user-not-found' || code === 'auth/wrong-password') {
-        setError('E-mail ou senha incorretos. Verifique suas credenciais ou solicite a redefinição de senha.');
+        setError('E-mail ou senha incorretos. Caso seja seu primeiro acesso ou não tenha senha, use a aba "Criar Conta" ou solicite a redefinição.');
       } else if (code === 'auth/invalid-email') {
         setError('Por favor, insira um e-mail válido.');
       } else if (code === 'auth/too-many-requests') {
         setError('Muitas tentativas malsucedidas. Aguarde alguns minutos ou redefina sua senha.');
       } else {
         setError('Erro no acesso: ' + (e.message || 'Dados inválidos.'));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Self-Registration / Account Creation (Aluno, Ajudante, Professor, Admin)
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setMessage('');
+
+    const emailLower = registerEmail.trim().toLowerCase();
+
+    if (!registerName.trim()) {
+      setError('Por favor, informe seu nome completo.');
+      setLoading(false);
+      return;
+    }
+
+    if (registerPassword.length < 6) {
+      setError('A senha deve conter no mínimo 6 caracteres.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // 1. Create user in Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, emailLower, registerPassword);
+      const uid = userCredential.user.uid;
+
+      // 2. Check if a profile with this email was already pre-registered by Sensei
+      let existingProfileId = uid;
+      try {
+        const q = query(collection(db, 'profiles'), where('email', '==', emailLower));
+        const qSnap = await getDocs(q);
+        if (!qSnap.empty) {
+          existingProfileId = qSnap.docs[0].id;
+        }
+      } catch (err) {
+        console.warn("Could not check existing profile on register:", err);
+      }
+
+      // 3. Save profile data in Firestore
+      await setDoc(doc(db, 'profiles', existingProfileId), {
+        id: existingProfileId,
+        userId: uid,
+        uid: uid,
+        fullName: registerName.trim(),
+        email: emailLower,
+        role: registerRole,
+        currentGrade: registerBelt,
+        status: 'active',
+        isApproved: true,
+        points: 50,
+        enrollmentDate: new Date().toISOString().split('T')[0],
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+
+      // Also ensure profiles/{uid} points correctly
+      if (existingProfileId !== uid) {
+        await setDoc(doc(db, 'profiles', uid), {
+          id: uid,
+          userId: uid,
+          role: registerRole,
+          fullName: registerName.trim(),
+          email: emailLower,
+          targetProfileId: existingProfileId,
+          isPointer: true
+        }, { merge: true });
+      }
+
+      // 4. Save users collection doc for rule caching
+      await setDoc(doc(db, 'users', uid), {
+        role: registerRole
+      }, { merge: true });
+
+      setMessage('Conta criada com sucesso! Entrando...');
+    } catch (e: any) {
+      console.error("Register error:", e);
+      if (e.code === 'auth/email-already-in-use') {
+        setError('Este e-mail já possui conta cadastrada. Tente fazer login ou redefinir a senha.');
+      } else if (e.code === 'auth/weak-password') {
+        setError('A senha informada é fraca. Use pelo menos 6 caracteres.');
+      } else {
+        setError('Erro ao criar conta: ' + (e.message || 'Tente novamente.'));
       }
     } finally {
       setLoading(false);
@@ -162,6 +263,42 @@ export default function Login() {
             Gestão Inteligente & Tatame Digital
           </p>
 
+          {/* Mode Switcher Tabs */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl mt-6">
+            <button
+              type="button"
+              onClick={() => {
+                setMode('login');
+                setError('');
+                setMessage('');
+              }}
+              className={cn(
+                "flex-1 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer text-center",
+                mode === 'login' 
+                  ? "bg-white text-slate-900 shadow-xs font-black" 
+                  : "text-slate-500 hover:text-slate-900"
+              )}
+            >
+              Entrar
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode('register');
+                setError('');
+                setMessage('');
+              }}
+              className={cn(
+                "flex-1 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer text-center",
+                mode === 'register' 
+                  ? "bg-white text-slate-900 shadow-xs font-black" 
+                  : "text-slate-500 hover:text-slate-900"
+              )}
+            >
+              Criar Conta / Cadastro
+            </button>
+          </div>
+
           {/* Error / Success Feedback */}
           {error && (
             <div className="mt-4 p-3.5 rounded-2xl text-xs font-bold text-center border bg-rose-50 text-rose-700 border-rose-200 flex items-center gap-2">
@@ -178,83 +315,187 @@ export default function Login() {
           )}
 
           {/* FORM: LOGIN */}
-          <form onSubmit={handleLogin} className="mt-6 space-y-4">
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 block ml-1">
-                E-mail
-              </label>
-              <div className="relative">
-                <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          {mode === 'login' ? (
+            <form onSubmit={handleLogin} className="mt-6 space-y-4">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 block ml-1">
+                  E-mail
+                </label>
+                <div className="relative">
+                  <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input 
+                    type="email"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 pl-10 pr-4 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-base transition-all font-medium text-slate-800"
+                    placeholder="seu@email.com"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1 ml-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Senha
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForgotEmail(username);
+                      setShowForgotModal(true);
+                      setForgotStatus('idle');
+                      setForgotError('');
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                  >
+                    Esqueceu a senha?
+                  </button>
+                </div>
+                <div className="relative">
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input 
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 pl-10 pr-11 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-base transition-all font-medium text-slate-800"
+                    placeholder="••••••••"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(prev => !prev)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <button 
+                type="submit"
+                disabled={loading}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white py-3.5 rounded-2xl font-black text-sm tracking-wide transition-colors shadow-md shadow-indigo-600/20 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2 mt-2 touch-manipulation select-none"
+              >
+                {loading ? 'Entrando...' : 'Entrar no Sistema'}
+                <ArrowRight className="w-4 h-4 pointer-events-none" />
+              </button>
+
+              {biometricSupported && hasBiometrics && (
+                <button 
+                  type="button"
+                  onClick={handleBiometricLogin}
+                  disabled={loading}
+                  className="w-full bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 py-3 rounded-2xl font-bold text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer touch-manipulation select-none"
+                >
+                  <Fingerprint className="w-4 h-4 pointer-events-none" />
+                  <span className="pointer-events-none">Entrar com Biometria</span>
+                </button>
+              )}
+            </form>
+          ) : (
+            // FORM: REGISTER
+            <form onSubmit={handleRegister} className="mt-6 space-y-4">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 block ml-1">
+                  Nome Completo
+                </label>
+                <input 
+                  type="text"
+                  value={registerName}
+                  onChange={(e) => setRegisterName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-base transition-all font-medium text-slate-800"
+                  placeholder="Nome do Aluno ou Professor"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 block ml-1">
+                  E-mail
+                </label>
                 <input 
                   type="email"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 pl-10 pr-4 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-base transition-all font-medium text-slate-800"
+                  value={registerEmail}
+                  onChange={(e) => setRegisterEmail(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-base transition-all font-medium text-slate-800"
                   placeholder="seu@email.com"
                   required
                 />
               </div>
-            </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-1 ml-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Senha
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 block ml-1">
+                  Crie uma Senha
                 </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForgotEmail(username);
-                    setShowForgotModal(true);
-                    setForgotStatus('idle');
-                    setForgotError('');
-                  }}
-                  className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
-                >
-                  Esqueceu a senha?
-                </button>
+                <div className="relative">
+                  <input 
+                    type={showPassword ? "text" : "password"}
+                    value={registerPassword}
+                    onChange={(e) => setRegisterPassword(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 pl-4 pr-11 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-base transition-all font-medium text-slate-800"
+                    placeholder="Mínimo 6 caracteres"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(prev => !prev)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input 
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 pl-10 pr-11 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-base transition-all font-medium text-slate-800"
-                  placeholder="••••••••"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(prev => !prev)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 block ml-1">
+                    Tipo de Acesso
+                  </label>
+                  <select
+                    value={registerRole}
+                    onChange={(e) => setRegisterRole(e.target.value as UserRole)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-3 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
+                  >
+                    <option value={UserRole.STUDENT}>🥋 Aluno</option>
+                    <option value={UserRole.ASSISTANT}>🥋 Ajudante</option>
+                    <option value={UserRole.PROFESSOR}>🥋 Professor / Sensei</option>
+                    <option value={UserRole.ADMIN}>🛡️ Administrador</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 block ml-1">
+                    Faixa de Judô
+                  </label>
+                  <select
+                    value={registerBelt}
+                    onChange={(e) => setRegisterBelt(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-3 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
+                  >
+                    <option value="Branca">Branca</option>
+                    <option value="Cinza">Cinza</option>
+                    <option value="Azul">Azul</option>
+                    <option value="Amarela">Amarela</option>
+                    <option value="Laranja">Laranja</option>
+                    <option value="Verde">Verde</option>
+                    <option value="Roxa">Roxa</option>
+                    <option value="Marrom">Marrom</option>
+                    <option value="Preta">Preta</option>
+                  </select>
+                </div>
               </div>
-            </div>
 
-            <button 
-              type="submit"
-              disabled={loading}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white py-3.5 rounded-2xl font-black text-sm tracking-wide transition-colors shadow-md shadow-indigo-600/20 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2 mt-2 touch-manipulation select-none"
-            >
-              {loading ? 'Entrando...' : 'Entrar no Sistema'}
-              <ArrowRight className="w-4 h-4 pointer-events-none" />
-            </button>
-
-            {biometricSupported && hasBiometrics && (
               <button 
-                type="button"
-                onClick={handleBiometricLogin}
+                type="submit"
                 disabled={loading}
-                className="w-full bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 py-3 rounded-2xl font-bold text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer touch-manipulation select-none"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white py-3.5 rounded-2xl font-black text-sm tracking-wide transition-colors shadow-md shadow-emerald-600/20 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2 mt-2 touch-manipulation select-none"
               >
-                <Fingerprint className="w-4 h-4 pointer-events-none" />
-                <span className="pointer-events-none">Entrar com Biometria</span>
+                {loading ? 'Cadastrando...' : 'Finalizar Cadastro & Acessar'}
+                <ArrowRight className="w-4 h-4 pointer-events-none" />
               </button>
-            )}
-          </form>
+            </form>
+          )}
 
           {/* Cross-Platform Badge Notice */}
           <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-center gap-2 text-[11px] text-slate-400 font-semibold text-center">
