@@ -375,10 +375,10 @@ export default function Login() {
               <button 
                 type="submit"
                 disabled={loading}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white py-3.5 rounded-2xl font-black text-sm tracking-wide transition-colors shadow-md shadow-indigo-600/20 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2 mt-2 touch-manipulation select-none"
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-2xl font-black text-sm tracking-wide transition-all shadow-md shadow-indigo-600/20 active:scale-[0.98] disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2 mt-2"
               >
                 {loading ? 'Entrando...' : 'Entrar no Sistema'}
-                <ArrowRight className="w-4 h-4 pointer-events-none" />
+                <ArrowRight className="w-4 h-4" />
               </button>
 
               {biometricSupported && hasBiometrics && (
@@ -386,10 +386,10 @@ export default function Login() {
                   type="button"
                   onClick={handleBiometricLogin}
                   disabled={loading}
-                  className="w-full bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 py-3 rounded-2xl font-bold text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer touch-manipulation select-none"
+                  className="w-full bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 text-indigo-700 py-3 rounded-2xl font-bold text-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
-                  <Fingerprint className="w-4 h-4 pointer-events-none" />
-                  <span className="pointer-events-none">Entrar com Biometria</span>
+                  <Fingerprint className="w-4 h-4" />
+                  Entrar com Biometria
                 </button>
               )}
             </form>
@@ -489,10 +489,10 @@ export default function Login() {
               <button 
                 type="submit"
                 disabled={loading}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white py-3.5 rounded-2xl font-black text-sm tracking-wide transition-colors shadow-md shadow-emerald-600/20 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2 mt-2 touch-manipulation select-none"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 rounded-2xl font-black text-sm tracking-wide transition-all shadow-md shadow-emerald-600/20 active:scale-[0.98] disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2 mt-2"
               >
                 {loading ? 'Cadastrando...' : 'Finalizar Cadastro & Acessar'}
-                <ArrowRight className="w-4 h-4 pointer-events-none" />
+                <ArrowRight className="w-4 h-4" />
               </button>
             </form>
           )}

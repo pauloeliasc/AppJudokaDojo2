@@ -147,86 +147,80 @@ function ProfessorHome({
       {/* Quick Navigation Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <button
-          type="button"
           onClick={() => setActiveTab('members')}
-          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-indigo-300 active:bg-indigo-50/50 transition-colors text-left flex flex-col justify-between group touch-manipulation select-none cursor-pointer"
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
         >
-          <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-2 pointer-events-none">
-            <Users className="w-4 h-4 pointer-events-none" />
+          <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <Users className="w-4 h-4" />
           </div>
-          <div className="pointer-events-none">
-            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-indigo-600 transition-colors pointer-events-none">Alunos</span>
-            <span className="text-[10px] text-slate-400 font-medium pointer-events-none">Gestão & fichas</span>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-indigo-600 transition-colors">Alunos</span>
+            <span className="text-[10px] text-slate-400 font-medium">Gestão & fichas</span>
           </div>
         </button>
 
         <button
-          type="button"
           onClick={() => setActiveTab('classes')}
-          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-indigo-300 active:bg-blue-50/50 transition-colors text-left flex flex-col justify-between group touch-manipulation select-none cursor-pointer"
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
         >
-          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-2 pointer-events-none">
-            <Calendar className="w-4 h-4 pointer-events-none" />
+          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <Calendar className="w-4 h-4" />
           </div>
-          <div className="pointer-events-none">
-            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-blue-600 transition-colors pointer-events-none">Agenda</span>
-            <span className="text-[10px] text-slate-400 font-medium pointer-events-none">Grade & treinos</span>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-blue-600 transition-colors">Agenda</span>
+            <span className="text-[10px] text-slate-400 font-medium">Grade & treinos</span>
           </div>
         </button>
 
         <button
-          type="button"
           onClick={() => setActiveTab('reports')}
-          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-indigo-300 active:bg-violet-50/50 transition-colors text-left flex flex-col justify-between group touch-manipulation select-none cursor-pointer"
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
         >
-          <div className="w-9 h-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center mb-2 pointer-events-none">
-            <Activity className="w-4 h-4 pointer-events-none" />
+          <div className="w-9 h-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <Activity className="w-4 h-4" />
           </div>
-          <div className="pointer-events-none">
-            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-violet-600 transition-colors pointer-events-none">Relatórios</span>
-            <span className="text-[10px] text-slate-400 font-medium pointer-events-none">Presença & PDF</span>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-violet-600 transition-colors">Relatórios</span>
+            <span className="text-[10px] text-slate-400 font-medium">Presença & PDF</span>
           </div>
         </button>
 
         <button
-          type="button"
           onClick={() => setActiveTab('graduation')}
-          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-indigo-300 active:bg-amber-50/50 transition-colors text-left flex flex-col justify-between group touch-manipulation select-none cursor-pointer"
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
         >
-          <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-2 pointer-events-none">
-            <GraduationCap className="w-4 h-4 pointer-events-none" />
+          <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <GraduationCap className="w-4 h-4" />
           </div>
-          <div className="pointer-events-none">
-            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-amber-600 transition-colors pointer-events-none">Graduação</span>
-            <span className="text-[10px] text-slate-400 font-medium pointer-events-none">Exames de faixa</span>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-amber-600 transition-colors">Graduação</span>
+            <span className="text-[10px] text-slate-400 font-medium">Exames de faixa</span>
           </div>
         </button>
 
         <button
-          type="button"
           onClick={() => setActiveTab('events')}
-          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-indigo-300 active:bg-pink-50/50 transition-colors text-left flex flex-col justify-between group touch-manipulation select-none cursor-pointer"
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
         >
-          <div className="w-9 h-9 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center mb-2 pointer-events-none">
-            <Megaphone className="w-4 h-4 pointer-events-none" />
+          <div className="w-9 h-9 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <Megaphone className="w-4 h-4" />
           </div>
-          <div className="pointer-events-none">
-            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-pink-600 transition-colors pointer-events-none">Eventos</span>
-            <span className="text-[10px] text-slate-400 font-medium pointer-events-none">Mural do Dojô</span>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-pink-600 transition-colors">Eventos</span>
+            <span className="text-[10px] text-slate-400 font-medium">Mural do Dojô</span>
           </div>
         </button>
 
         <button
-          type="button"
           onClick={() => setActiveTab('ranking')}
-          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-indigo-300 active:bg-rose-50/50 transition-colors text-left flex flex-col justify-between group touch-manipulation select-none cursor-pointer"
+          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all text-left flex flex-col justify-between group active:scale-95 cursor-pointer"
         >
-          <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mb-2 pointer-events-none">
-            <Trophy className="w-4 h-4 pointer-events-none" />
+          <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+            <Trophy className="w-4 h-4" />
           </div>
-          <div className="pointer-events-none">
-            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-rose-600 transition-colors pointer-events-none">Conquistas</span>
-            <span className="text-[10px] text-slate-400 font-medium pointer-events-none">Ranking geral</span>
+          <div>
+            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-rose-600 transition-colors">Conquistas</span>
+            <span className="text-[10px] text-slate-400 font-medium">Ranking geral</span>
           </div>
         </button>
       </div>

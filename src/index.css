@@ -8,6 +8,7 @@
 @layer base {
   body {
     @apply bg-slate-50 text-slate-800 antialiased;
+    /* Prevent elastic scrolling in some browsers if desired, but usually okay for pwas */
     min-height: 100vh;
     min-height: -webkit-fill-available;
   }
@@ -18,23 +19,6 @@
 
   * {
     -webkit-tap-highlight-color: transparent;
-  }
-
-  /* Universal instant touch response & eliminate 300ms click delay across all devices */
-  html, body, button, a, input, select, textarea, [role="button"], label {
-    touch-action: manipulation;
-  }
-
-  button, [role="button"], a {
-    -webkit-touch-callout: none;
-    user-select: none;
-    -webkit-user-select: none;
-    cursor: pointer;
-  }
-
-  /* Prevent SVGs and child icons inside buttons from hijacking touch event target */
-  button svg, a svg, [role="button"] svg {
-    pointer-events: none;
   }
 
   /* Handle safe areas for devices with notches */

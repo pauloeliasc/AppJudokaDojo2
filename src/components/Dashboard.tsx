@@ -110,20 +110,19 @@ export default function Dashboard() {
         <div className="flex items-center gap-2.5 min-w-0">
           {activeTab !== 'home' ? (
             <button
-              type="button"
               onClick={() => setActiveTab('home')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 text-xs font-bold transition-all border border-slate-200/80 shadow-2xs shrink-0 touch-manipulation select-none cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-all active:scale-95 border border-slate-200/80 shadow-2xs shrink-0"
               aria-label="Voltar para o início"
             >
-              <ChevronLeft className="w-4 h-4 text-slate-600 pointer-events-none" />
-              <span className="pointer-events-none">Início</span>
+              <ChevronLeft className="w-4 h-4 text-slate-600" />
+              <span>Início</span>
             </button>
           ) : (
             <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center overflow-hidden shrink-0 border border-slate-700/20">
               <img 
                 src="./logo.png" 
                 alt="Judoka Dojô" 
-                className="w-7 h-7 object-contain pointer-events-none"
+                className="w-7 h-7 object-contain"
                 referrerPolicy="no-referrer"
               />
             </div>
@@ -139,12 +138,11 @@ export default function Dashboard() {
         </div>
 
         <button
-          type="button"
           onClick={() => setMobileMenuOpen(prev => !prev)}
-          className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 flex items-center justify-center transition-colors touch-manipulation select-none cursor-pointer"
+          className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors active:scale-95"
           aria-label="Menu de Navegação"
         >
-          {mobileMenuOpen ? <X className="w-5 h-5 pointer-events-none" /> : <Menu className="w-5 h-5 pointer-events-none" />}
+          {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
       </header>
 
@@ -313,13 +311,13 @@ export default function Dashboard() {
           )}
 
           {activeTab === 'home' && <PWAInstallPrompt />}
-          <AnimatePresence>
+          <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
             >
               {renderView()}
             </motion.div>
@@ -328,41 +326,39 @@ export default function Dashboard() {
       </main>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-1.5 z-40 flex justify-around items-center safe-bottom shadow-2xl rounded-t-3xl">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-2 z-40 flex justify-around items-center safe-bottom shadow-2xl rounded-t-3xl">
         {bottomNavItems.map((item) => {
           const isActive = activeTab === item.id;
           return (
             <button
               key={item.id}
-              type="button"
               onClick={() => handleSelectTab(item.id)}
               className={cn(
-                "flex flex-col items-center justify-center gap-1 py-1.5 px-3 rounded-2xl transition-colors active:bg-slate-100 min-w-[62px] min-h-[48px] touch-manipulation select-none cursor-pointer",
+                "flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-2xl transition-all active:scale-90 min-w-[58px]",
                 isActive ? "text-indigo-600 font-extrabold" : "text-slate-400 font-medium"
               )}
             >
-              <item.icon className={cn("w-5 h-5 transition-transform pointer-events-none", isActive && "scale-110 stroke-[2.5]")} />
-              <span className="text-[10px] tracking-tight pointer-events-none">{item.label}</span>
+              <item.icon className={cn("w-5 h-5 transition-transform", isActive && "scale-110 stroke-[2.5]")} />
+              <span className="text-[10px] tracking-tight">{item.label}</span>
             </button>
           );
         })}
 
         {/* Full Menu Button ("Mais") */}
         <button
-          type="button"
           onClick={() => setMobileMenuOpen(prev => !prev)}
           className={cn(
-            "flex flex-col items-center justify-center gap-1 py-1.5 px-3 rounded-2xl transition-colors active:bg-slate-100 relative min-w-[62px] min-h-[48px] touch-manipulation select-none cursor-pointer",
+            "flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-2xl transition-all active:scale-90 relative min-w-[58px]",
             isSecondaryTabActive || mobileMenuOpen ? "text-indigo-600 font-extrabold" : "text-slate-400 font-medium"
           )}
         >
-          <div className="relative pointer-events-none">
+          <div className="relative">
             <Menu className={cn("w-5 h-5 transition-transform", (isSecondaryTabActive || mobileMenuOpen) && "scale-110 stroke-[2.5]")} />
             {isSecondaryTabActive && (
               <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-indigo-600 ring-2 ring-white" />
             )}
           </div>
-          <span className="text-[10px] tracking-tight pointer-events-none">Mais</span>
+          <span className="text-[10px] tracking-tight">Mais</span>
         </button>
       </nav>
     </div>

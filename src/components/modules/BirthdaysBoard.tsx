@@ -293,19 +293,18 @@ export default function BirthdaysBoard({
         {/* Period Switcher: Month vs Week */}
         <div className="flex items-center bg-slate-100/90 p-1.5 rounded-2xl self-start md:self-auto border border-slate-200/70 shadow-xs">
           <button
-            type="button"
             onClick={() => setPeriod('month')}
             className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all touch-manipulation select-none cursor-pointer",
+              "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all",
               period === 'month'
                 ? "bg-white text-indigo-600 shadow-sm"
                 : "text-slate-600 hover:text-slate-900"
             )}
           >
-            <Calendar className="w-4 h-4 pointer-events-none" />
-            <span className="pointer-events-none">Aniversariantes do Mês</span>
+            <Calendar className="w-4 h-4" />
+            <span>Aniversariantes do Mês</span>
             <span className={cn(
-              "px-2 py-0.5 text-[10px] rounded-full font-extrabold pointer-events-none",
+              "px-2 py-0.5 text-[10px] rounded-full font-extrabold",
               period === 'month' ? "bg-indigo-50 text-indigo-700" : "bg-slate-200 text-slate-600"
             )}>
               {selectedMonth === currentMonth ? totalInCurrentMonth : allParsed.filter(b => b.month === selectedMonth).length}
@@ -313,19 +312,18 @@ export default function BirthdaysBoard({
           </button>
 
           <button
-            type="button"
             onClick={() => setPeriod('week')}
             className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all touch-manipulation select-none cursor-pointer",
+              "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all",
               period === 'week'
                 ? "bg-white text-pink-600 shadow-sm"
                 : "text-slate-600 hover:text-slate-900"
             )}
           >
-            <Gift className="w-4 h-4 pointer-events-none" />
-            <span className="pointer-events-none">Da Semana</span>
+            <Gift className="w-4 h-4" />
+            <span>Da Semana</span>
             <span className={cn(
-              "px-2 py-0.5 text-[10px] rounded-full font-extrabold pointer-events-none",
+              "px-2 py-0.5 text-[10px] rounded-full font-extrabold",
               period === 'week' ? "bg-pink-50 text-pink-700" : "bg-slate-200 text-slate-600"
             )}>
               {totalInCurrentWeek}
@@ -340,14 +338,13 @@ export default function BirthdaysBoard({
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center bg-white border border-slate-200 rounded-xl shadow-2xs overflow-hidden">
               <button
-                type="button"
                 onClick={() => setSelectedMonth(m => m === 1 ? 12 : m - 1)}
-                className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-50 active:bg-slate-100 transition-colors touch-manipulation cursor-pointer"
+                className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors"
                 title="Mês anterior"
               >
-                <ChevronLeft className="w-4 h-4 pointer-events-none" />
+                <ChevronLeft className="w-4 h-4" />
               </button>
-              <div className="px-3 py-1.5 flex items-center gap-1.5 select-none">
+              <div className="px-3 py-1.5 flex items-center gap-1.5">
                 <span className="font-extrabold text-xs text-slate-800">
                   {MONTH_NAMES[selectedMonth - 1]}
                 </span>
@@ -358,27 +355,25 @@ export default function BirthdaysBoard({
                 )}
               </div>
               <button
-                type="button"
                 onClick={() => setSelectedMonth(m => m === 12 ? 1 : m + 1)}
-                className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-50 active:bg-slate-100 transition-colors touch-manipulation cursor-pointer"
+                className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors"
                 title="Próximo mês"
               >
-                <ChevronRight className="w-4 h-4 pointer-events-none" />
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
 
             {selectedMonth !== currentMonth && (
               <button
-                type="button"
                 onClick={() => setSelectedMonth(currentMonth)}
-                className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 active:bg-indigo-50 bg-white border border-indigo-200 px-2.5 py-1.5 rounded-xl shadow-2xs transition-colors touch-manipulation select-none cursor-pointer"
+                className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-white border border-indigo-200 px-2.5 py-1.5 rounded-xl shadow-2xs transition-colors"
               >
-                Mês Atual
+                Ir para Mês Atual ({MONTH_NAMES[currentMonth - 1]})
               </button>
             )}
           </div>
         ) : (
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-600 select-none">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
             <span className="w-2 h-2 rounded-full bg-pink-500" />
             <span>Semana de {weekStart.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} a {weekEnd.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
           </div>
@@ -387,7 +382,7 @@ export default function BirthdaysBoard({
         <div className="flex items-center gap-2 flex-1 sm:justify-end">
           {/* Search Box */}
           <div className="relative flex-1 sm:max-w-[200px]">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Buscar aniversariante..."
@@ -398,32 +393,29 @@ export default function BirthdaysBoard({
           </div>
 
           {/* Role Filter Pills */}
-          <div className="flex items-center gap-1 bg-white border border-slate-200 p-1 rounded-xl shadow-2xs shrink-0 select-none">
+          <div className="flex items-center gap-1 bg-white border border-slate-200 p-1 rounded-xl shadow-2xs shrink-0">
             <button
-              type="button"
               onClick={() => setRoleFilter('all')}
               className={cn(
-                "px-2.5 py-1 rounded-lg text-[10px] font-bold transition-colors touch-manipulation cursor-pointer",
+                "px-2 py-1 rounded-lg text-[10px] font-bold transition-colors",
                 roleFilter === 'all' ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-900"
               )}
             >
               Todos
             </button>
             <button
-              type="button"
               onClick={() => setRoleFilter('students')}
               className={cn(
-                "px-2.5 py-1 rounded-lg text-[10px] font-bold transition-colors touch-manipulation cursor-pointer",
+                "px-2 py-1 rounded-lg text-[10px] font-bold transition-colors",
                 roleFilter === 'students' ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-900"
               )}
             >
               Alunos
             </button>
             <button
-              type="button"
               onClick={() => setRoleFilter('staff')}
               className={cn(
-                "px-2.5 py-1 rounded-lg text-[10px] font-bold transition-colors touch-manipulation cursor-pointer",
+                "px-2 py-1 rounded-lg text-[10px] font-bold transition-colors",
                 roleFilter === 'staff' ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-900"
               )}
             >

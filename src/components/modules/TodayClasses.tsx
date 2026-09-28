@@ -671,13 +671,12 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
               {isClassCanceled ? (
                 isAdminOrProfessor ? (
                   <button
-                    type="button"
                     disabled={isLoading}
                     onClick={() => handleReactivateClass(item as any, 'isClass' in item)}
-                    className="mt-6 w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-colors shadow-md shadow-emerald-500/15 cursor-pointer touch-manipulation select-none"
+                    className="mt-6 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-500/15 cursor-pointer"
                   >
-                    {loading === `reactivate-${id}` ? <Loader2 className="w-4 h-4 animate-spin pointer-events-none" /> : <RefreshCw className="w-4 h-4 pointer-events-none" />}
-                    <span className="pointer-events-none">Reativar Aula</span>
+                    {loading === `reactivate-${id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                    Reativar Aula
                   </button>
                 ) : (
                   <div className="mt-6 w-full py-3.5 bg-slate-100 border border-slate-200 text-slate-400 font-extrabold text-[10px] uppercase tracking-widest text-center rounded-xl cursor-not-allowed select-none">
@@ -689,53 +688,49 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
                   {canManageAttendance ? (
                     <div className="mt-6 space-y-2">
                       <button
-                        type="button"
                         disabled={loadingChamadaId === id}
                         onClick={() => handleOpenChamada(item, 'isClass' in item)}
-                        className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-colors shadow-md shadow-indigo-600/10 cursor-pointer touch-manipulation select-none"
+                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-md shadow-indigo-600/10 active:scale-[0.99] cursor-pointer"
                       >
                         {loadingChamadaId === id ? (
-                          <Loader2 className="w-4 h-4 animate-spin pointer-events-none" />
+                          <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
-                          <Users className="w-4 h-4 pointer-events-none" />
+                          <Users className="w-4 h-4" />
                         )}
-                        <span className="pointer-events-none">Fazer Chamada / Presenças</span>
+                        Fazer Chamada / Presenças
                       </button>
 
                       {hasCheckedIn && confirmCancelId === id ? (
                         <div className="flex gap-2 w-full animate-fade-in/10">
                           <button
-                            type="button"
                             disabled={isLoading}
                             onClick={() => handleCancelCheckIn(item as any, 'isClass' in item)}
-                            className="flex-1 py-2.5 bg-rose-600 text-white rounded-lg font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors hover:bg-rose-700 active:bg-rose-800 touch-manipulation select-none cursor-pointer"
+                            className="flex-1 py-2 bg-rose-600 text-white rounded-lg font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all hover:bg-rose-700"
                           >
-                            {isLoading ? <Loader2 className="w-3 animate-spin pointer-events-none" /> : <AlertCircle className="w-3 h-3 pointer-events-none" />}
-                            <span className="pointer-events-none">Confirmar</span>
+                            {isLoading ? <Loader2 className="w-3 animate-spin" /> : <AlertCircle className="w-3 h-3" />}
+                            Confirmar
                           </button>
                           <button
-                            type="button"
                             disabled={isLoading}
                             onClick={() => setConfirmCancelId(null)}
-                            className="flex-1 py-2.5 bg-slate-200 text-slate-700 rounded-lg font-bold text-[10px] uppercase tracking-wider flex items-center justify-center transition-colors hover:bg-slate-300 active:bg-slate-400 touch-manipulation select-none cursor-pointer"
+                            className="flex-1 py-2 bg-slate-200 text-slate-700 rounded-lg font-bold text-[10px] uppercase tracking-wider flex items-center justify-center transition-all hover:bg-slate-300"
                           >
-                            <span className="pointer-events-none">Voltar</span>
+                            Voltar
                           </button>
                         </div>
                       ) : (
                         <button
-                          type="button"
                           disabled={isLoading}
                           onClick={() => hasCheckedIn ? handleCancelCheckIn(item as any, 'isClass' in item) : handleCheckIn(item as any, 'isClass' in item)}
                           className={cn(
-                            "w-full py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors touch-manipulation select-none cursor-pointer",
+                            "w-full py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all",
                             hasCheckedIn 
-                              ? "bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 active:bg-rose-200" 
-                              : "bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700"
+                              ? "bg-rose-50 text-rose-600 border border-rose-150/70 hover:bg-rose-100" 
+                              : "bg-slate-100 hover:bg-slate-200 text-slate-700"
                           )}
                         >
-                          {isLoading ? <Loader2 className="w-3 h-3 animate-spin pointer-events-none" /> : hasCheckedIn ? <AlertCircle className="w-3.5 h-3.5 pointer-events-none" /> : <Activity className="w-3.5 h-3.5 pointer-events-none" />}
-                          <span className="pointer-events-none">{hasCheckedIn ? 'Remover Meu Check-in' : 'Marcar Meu Check-in'}</span>
+                          {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : hasCheckedIn ? <AlertCircle className="w-3.5 h-3.5" /> : <Activity className="w-3.5 h-3.5" />}
+                          {hasCheckedIn ? 'Remover Meu Check-in' : 'Marcar Meu Check-in'}
                         </button>
                       )}
                     </div>
@@ -744,37 +739,34 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
                     hasCheckedIn && confirmCancelId === id ? (
                       <div className="mt-6 flex gap-2 w-full animate-fade-in/10">
                         <button
-                          type="button"
                           disabled={isLoading}
                           onClick={() => handleCancelCheckIn(item as any, 'isClass' in item)}
-                          className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors hover:bg-rose-700 active:bg-rose-800 shadow-md shadow-rose-500/15 touch-manipulation select-none cursor-pointer"
+                          className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all hover:bg-rose-700 shadow-md shadow-rose-500/15"
                         >
-                          {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin pointer-events-none" /> : <AlertCircle className="w-3.5 h-3.5 pointer-events-none" />}
-                          <span className="pointer-events-none">Confirmar</span>
+                          {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                          Confirmar
                         </button>
                         <button
-                          type="button"
                           disabled={isLoading}
                           onClick={() => setConfirmCancelId(null)}
-                          className="flex-1 py-3 bg-slate-200 text-slate-700 rounded-xl font-bold text-[11px] uppercase tracking-wider flex items-center justify-center transition-colors hover:bg-slate-300 active:bg-slate-400 touch-manipulation select-none cursor-pointer"
+                          className="flex-1 py-3 bg-slate-200 text-slate-700 rounded-xl font-bold text-[11px] uppercase tracking-wider flex items-center justify-center transition-all hover:bg-slate-300"
                         >
-                          <span className="pointer-events-none">Voltar</span>
+                          Voltar
                         </button>
                       </div>
                     ) : (
                       <button
-                        type="button"
                         disabled={isLoading}
                         onClick={() => hasCheckedIn ? handleCancelCheckIn(item as any, 'isClass' in item) : handleCheckIn(item as any, 'isClass' in item)}
                         className={cn(
-                          "mt-6 w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-colors touch-manipulation select-none cursor-pointer",
+                          "mt-6 w-full py-3 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all",
                           hasCheckedIn 
-                            ? "bg-rose-500 text-white shadow-lg shadow-rose-500/20 hover:bg-rose-600 active:bg-rose-700" 
-                            : "bg-slate-900 text-white hover:bg-slate-800 active:bg-slate-950 shadow-lg"
+                            ? "bg-rose-500 text-white shadow-lg shadow-rose-500/20 hover:bg-rose-600" 
+                            : "bg-[#0a0a0a] text-[#ffffff] hover:scale-[1.02] shadow-lg"
                         )}
                       >
-                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin pointer-events-none" /> : hasCheckedIn ? <AlertCircle className="w-4 h-4 pointer-events-none" /> : <Activity className="w-4 h-4 pointer-events-none" />}
-                        <span className="pointer-events-none">{hasCheckedIn ? 'Cancelar Check-in' : 'Fazer Check-in'}</span>
+                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : hasCheckedIn ? <AlertCircle className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
+                        {hasCheckedIn ? 'Cancelar Check-in' : 'Fazer Check-in'}
                       </button>
                     )
                   )}
