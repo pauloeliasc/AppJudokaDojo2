@@ -94,7 +94,7 @@ export default function AdminView({ activeTab, setActiveTab }: { activeTab: stri
     };
   }, [user]);
 
-  if (activeTab === 'home') return <AdminHome profiles={profiles} classes={classes} payments={payments} schedules={schedules} profile={profile} settings={settings} setActiveTab={setActiveTab} />;
+  if (activeTab === 'home') return <AdminHome profiles={profiles} classes={classes} payments={payments} schedules={schedules} profile={profile} settings={settings} allPresences={allPresences} setActiveTab={setActiveTab} />;
   if (activeTab === 'members') return <MemberManagement profiles={profiles} payments={payments} />;
   if (activeTab === 'finance') return <FinanceManagement profiles={profiles} payments={payments} settings={settings} />;
   if (activeTab === 'classes') return <ClassManagement classes={classes} profiles={profiles} />;
@@ -115,6 +115,7 @@ function AdminHome({
   schedules, 
   profile, 
   settings,
+  allPresences,
   setActiveTab
 }: { 
   profiles: Profile[], 
@@ -123,6 +124,7 @@ function AdminHome({
   schedules: Schedule[], 
   profile: Profile | null, 
   settings: Settings | null,
+  allPresences: Presence[],
   setActiveTab: (t: string) => void
 }) {
   const pendingPayments = payments.filter(p => p.status === 'pending').length;
@@ -131,6 +133,16 @@ function AdminHome({
   const totalStudents = activeProfiles.filter(p => !p.role || p.role === UserRole.STUDENT).length;
   const totalProfessors = activeProfiles.filter(p => p.role === UserRole.PROFESSOR).length;
   const totalAdmins = activeProfiles.filter(p => p.role === UserRole.ADMIN).length;
+
+  const todayDateStr = new Date().getFullYear() + '-' + 
+    String(new Date().getMonth() + 1).padStart(2, '0') + '-' + 
+    String(new Date().getDate()).padStart(2, '0');
+
+  const totalAllCheckIns = allPresences.length;
+  const todayCheckIns = allPresences.filter(p => 
+    (p.checkInDate && p.checkInDate === todayDateStr) || 
+    (p.timestamp && p.timestamp.startsWith(todayDateStr))
+  ).length;
 
   return (
     <div className="space-y-8">
@@ -156,6 +168,106 @@ function AdminHome({
           </div>
         </div>
       </header>
+
+      {/* Prominent Attendance & Dojo Metrics Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div 
+          onClick={() => setActiveTab('reports')}
+          className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total de Check-ins</span>
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Activity className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-black text-indigo-600 leading-none">{totalAllCheckIns}</span>
+              <span className="text-xs font-bold text-slate-500">presenças</span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium mt-1">
+              Todos os check-ins dos usuários
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Presenças Hoje</span>
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <Clock className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-black text-emerald-600 leading-none">{todayCheckIns}</span>
+              <span className="text-xs font-bold text-slate-500">hoje</span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium mt-1">
+              Alunos presentes no tatame
+            </p>
+          </div>
+        </div>
+
+        <div 
+          onClick={() => setActiveTab('members')}
+          className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total de Alunos</span>
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Users className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-black text-blue-600 leading-none">{totalStudents}</span>
+              <span className="text-xs font-bold text-slate-500">ativos</span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium mt-1">
+              {totalProfessors} professores • {totalAdmins} admin
+            </p>
+          </div>
+        </div>
+
+        <div 
+          onClick={() => setActiveTab('finance')}
+          className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs hover:border-amber-400 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Mensalidades</span>
+            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Wallet className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-black text-amber-600 leading-none">{pendingPayments}</span>
+              <span className="text-xs font-bold text-slate-500">pendentes</span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium mt-1">
+              Acompanhamento financeiro
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Immediate Check-in & Classes of Today */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+            <h3 className="font-extrabold text-base sm:text-lg text-slate-900 tracking-tight">
+              Aulas & Controle de Presença de Hoje
+            </h3>
+          </div>
+          <span className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer" onClick={() => setActiveTab('classes')}>
+            Ver grade completa →
+          </span>
+        </div>
+        <TodayClasses profile={profile} classes={classes} schedules={schedules} />
+      </div>
 
       {/* Quick Navigation Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
@@ -257,8 +369,6 @@ function AdminHome({
           </div>
         </button>
       </div>
-
-      <TodayClasses profile={profile} classes={classes} schedules={schedules} />
 
       <BirthdaysBoard profiles={profiles} />
 

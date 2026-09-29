@@ -27,7 +27,6 @@ try {
     localCache: persistentLocalCache({
       tabManager: persistentMultipleTabManager()
     }),
-    experimentalForceLongPolling: true,
   }, firebaseConfig.firestoreDatabaseId);
 } catch (err) {
   // If already initialized or cache failed, fallback to getFirestore

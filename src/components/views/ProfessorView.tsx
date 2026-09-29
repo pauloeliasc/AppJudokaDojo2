@@ -89,7 +89,7 @@ export default function ProfessorView({ activeTab, setActiveTab }: { activeTab: 
     };
   }, [user]);
 
-  if (activeTab === 'home') return <ProfessorHome profiles={profiles} classes={classes} schedules={schedules} profile={profile} payments={payments} setActiveTab={setActiveTab} />;
+  if (activeTab === 'home') return <ProfessorHome profiles={profiles} classes={classes} schedules={schedules} profile={profile} payments={payments} allPresences={allPresences} setActiveTab={setActiveTab} />;
   if (activeTab === 'members') return <MemberManagement profiles={profiles} payments={payments} />;
   if (activeTab === 'classes') return <ClassManagement classes={classes} profiles={profiles} />;
   if (activeTab === 'graduation') return <GraduationView />;
@@ -108,6 +108,7 @@ function ProfessorHome({
   schedules, 
   profile, 
   payments,
+  allPresences,
   setActiveTab
 }: { 
   profiles: Profile[], 
@@ -115,9 +116,20 @@ function ProfessorHome({
   schedules: Schedule[], 
   profile: Profile | null, 
   payments: Payment[],
+  allPresences: Presence[],
   setActiveTab: (t: string) => void
 }) {
   const totalStudents = profiles.filter(p => !p.role || p.role === UserRole.STUDENT).length;
+
+  const todayDateStr = new Date().getFullYear() + '-' + 
+    String(new Date().getMonth() + 1).padStart(2, '0') + '-' + 
+    String(new Date().getDate()).padStart(2, '0');
+
+  const totalAllCheckIns = allPresences.length;
+  const todayCheckIns = allPresences.filter(p => 
+    (p.checkInDate && p.checkInDate === todayDateStr) || 
+    (p.timestamp && p.timestamp.startsWith(todayDateStr))
+  ).length;
 
   return (
     <div className="space-y-8">
@@ -143,6 +155,106 @@ function ProfessorHome({
           </div>
         </div>
       </header>
+
+      {/* Prominent Attendance & Dojo Metrics Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div 
+          onClick={() => setActiveTab('reports')}
+          className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total de Check-ins</span>
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Activity className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-black text-indigo-600 leading-none">{totalAllCheckIns}</span>
+              <span className="text-xs font-bold text-slate-500">presenças</span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium mt-1">
+              Todos os check-ins no sistema
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Presenças Hoje</span>
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <Clock className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-black text-emerald-600 leading-none">{todayCheckIns}</span>
+              <span className="text-xs font-bold text-slate-500">hoje</span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium mt-1">
+              Alunos no tatame neste dia
+            </p>
+          </div>
+        </div>
+
+        <div 
+          onClick={() => setActiveTab('members')}
+          className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total de Alunos</span>
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Users className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-black text-blue-600 leading-none">{totalStudents}</span>
+              <span className="text-xs font-bold text-slate-500">cadastrados</span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium mt-1">
+              Gestão de turmas e fichas
+            </p>
+          </div>
+        </div>
+
+        <div 
+          onClick={() => setActiveTab('classes')}
+          className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs hover:border-amber-400 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Grade de Treinos</span>
+            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Calendar className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-black text-amber-600 leading-none">{schedules.length}</span>
+              <span className="text-xs font-bold text-slate-500">horários</span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium mt-1">
+              Horários regulares na semana
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Immediate Check-in & Classes of Today */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+            <h3 className="font-extrabold text-base sm:text-lg text-slate-900 tracking-tight">
+              Aulas & Controle de Presença de Hoje
+            </h3>
+          </div>
+          <span className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer" onClick={() => setActiveTab('classes')}>
+            Ver grade completa →
+          </span>
+        </div>
+        <TodayClasses profile={profile} classes={classes} schedules={schedules} />
+      </div>
 
       {/* Quick Navigation Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -230,8 +342,6 @@ function ProfessorHome({
           </div>
         </button>
       </div>
-
-      <TodayClasses profile={profile} classes={classes} schedules={schedules} />
 
       <BirthdaysBoard profiles={profiles} />
 

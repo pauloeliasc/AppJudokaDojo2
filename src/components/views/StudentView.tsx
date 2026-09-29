@@ -87,7 +87,95 @@ export default function StudentView({ activeTab, setActiveTab, forcedProfile }: 
     };
   }, [user, forcedProfile?.id]);
 
-  if (activeTab === 'home') return <StudentHome profile={profile} classes={classes} payments={payments} schedules={schedules} presences={userPresenceList} allProfiles={allProfiles} settings={settings} setActiveTab={setActiveTab} />;
+  const [allDojoPresences, setAllDojoPresences] = useState<Presence[]>([]);
+
+  useEffect(() => {
+    if (!auth.currentUser || (!user && !forcedProfile)) return;
+
+    const profileId = forcedProfile?.id || user?.id || user?.uid || (auth.currentUser ? auth.currentUser.uid : '');
+    if (!profileId || profileId === 'undefined') return;
+
+    const unsubProfile = onSnapshot(doc(db, 'profiles', profileId), (doc) => {
+      if (doc.exists()) setProfile({ ...doc.data(), id: doc.id } as Profile);
+    });
+
+    const unsubClasses = onSnapshot(collection(db, 'classes'), (snapshot) => {
+      setClasses(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ClassSession)));
+    });
+
+    const unsubPayments = onSnapshot(query(collection(db, 'payments'), where('memberId', '==', profileId)), (snapshot) => {
+      setPayments(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Payment)));
+    });
+
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
+      if (doc.exists()) setSettings(doc.data() as Settings);
+    });
+
+    const unsubSchedules = onSnapshot(collection(db, 'schedule'), (snapshot) => {
+      setSchedules(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Schedule)));
+    });
+
+    const unsubAllProfiles = onSnapshot(collection(db, 'profiles'), (snapshot) => {
+      const seen = new Set<string>();
+      const list: Profile[] = [];
+      for (const doc of snapshot.docs) {
+        const item = { ...doc.data(), id: doc.id } as Profile;
+        if (!item.isPointer && !seen.has(item.id)) {
+          seen.add(item.id);
+          list.push(item);
+        }
+      }
+      setAllProfiles(list);
+    });
+
+    // Fetch user presences
+    const unsubPresences = onSnapshot(
+      query(collectionGroup(db, 'presences'), where('memberId', '==', profileId)),
+      (snapshot) => {
+        const list = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Presence));
+        // Sort on client side to avoid index requirement
+        list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        setUserPresenceList(list);
+      }
+    );
+
+    // Fetch all dojo presences for grand total checkins display
+    const unsubAllPresences = onSnapshot(
+      collectionGroup(db, 'presences'),
+      (snapshot) => {
+        const list = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Presence));
+        setAllDojoPresences(list);
+      },
+      (err) => {
+        console.warn("Notice: all presences listener:", err);
+      }
+    );
+
+    return () => {
+      unsubProfile();
+      unsubClasses();
+      unsubPayments();
+      unsubSettings();
+      unsubSchedules();
+      unsubAllProfiles();
+      unsubPresences();
+      unsubAllPresences();
+    };
+  }, [user, forcedProfile?.id]);
+
+  if (activeTab === 'home') return (
+    <StudentHome 
+      profile={profile} 
+      classes={classes} 
+      payments={payments} 
+      schedules={schedules} 
+      presences={userPresenceList} 
+      allDojoPresences={allDojoPresences}
+      allProfiles={allProfiles} 
+      settings={settings} 
+      setActiveTab={setActiveTab} 
+    />
+  );
   if (activeTab === 'profile') return <StudentProfile profile={profile} />;
   if (activeTab === 'graduation') return <GraduationView />;
   if (activeTab === 'ranking') return <StudentAchievements profileId={profile?.id} />;
@@ -104,6 +192,7 @@ function StudentHome({
   payments, 
   schedules, 
   presences, 
+  allDojoPresences,
   allProfiles, 
   settings,
   setActiveTab
@@ -113,6 +202,7 @@ function StudentHome({
   payments: Payment[], 
   schedules: Schedule[], 
   presences: Presence[], 
+  allDojoPresences: Presence[],
   allProfiles: Profile[], 
   settings: Settings | null,
   setActiveTab: (t: string) => void
@@ -130,14 +220,23 @@ function StudentHome({
   const payment = payments.find(p => p.month === currentMonth && p.year === currentYear);
   const isPaid = payment?.status === 'paid';
 
-  const totalCheckIns = presences.length;
+  const myTotalCheckIns = presences.length;
   const uniqueDays = new Set(presences.map(p => p.checkInDate || p.timestamp.split('T')[0])).size;
 
+  const todayDateStr = new Date().getFullYear() + '-' + 
+    String(new Date().getMonth() + 1).padStart(2, '0') + '-' + 
+    String(new Date().getDate()).padStart(2, '0');
 
+  const totalDojoCheckIns = allDojoPresences.length;
+  const todayDojoCheckIns = allDojoPresences.filter(p => 
+    (p.checkInDate && p.checkInDate === todayDateStr) || 
+    (p.timestamp && p.timestamp.startsWith(todayDateStr))
+  ).length;
 
   return (
-    <div className="space-y-10">
-      <header className="flex justify-between items-end flex-wrap gap-4">
+    <div className="space-y-8">
+      {/* Header with Student Greetings */}
+      <header className="flex justify-between items-center flex-wrap gap-4">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-200 overflow-hidden shrink-0">
             <img 
@@ -148,42 +247,127 @@ function StudentHome({
             />
           </div>
           <div>
-            <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Olá, {profile?.fullName.split(' ')[0]}</h2>
-            <p className="text-slate-500 text-sm mt-1">Bem-vindo de volta ao dojo. Bons treinos!</p>
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+              Olá, {profile?.fullName ? profile.fullName.split(' ')[0] : 'Judoca'}!
+            </h2>
+            <p className="text-slate-500 text-xs sm:text-sm mt-0.5 font-medium">
+              Faixa <span className="font-extrabold text-slate-800">{profile?.currentGrade || 'Branca'}</span> • {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </p>
           </div>
         </div>
-        <div className="flex gap-3">
-          <div className="flex items-center gap-3 px-5 py-2.5 bg-white rounded-lg border border-slate-200 shadow-sm">
-             <div 
-               onClick={() => setActiveTab('history')}
-               className="flex flex-col items-center border-r border-slate-100 pr-3 cursor-pointer hover:opacity-80 transition-opacity"
-               title="Ver histórico de treinos"
-             >
-               <span className="text-lg font-black text-indigo-600 leading-none">{totalCheckIns}</span>
-               <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Check-ins</span>
-             </div>
-             <div 
-               onClick={() => setActiveTab('history')}
-               className="flex flex-col items-center border-r border-slate-100 pr-3 cursor-pointer hover:opacity-80 transition-opacity"
-               title="Ver dias de presença"
-             >
-               <span className="text-lg font-black text-emerald-600 leading-none">{uniqueDays}</span>
-               <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Dias</span>
-             </div>
-             <div 
-               onClick={() => setActiveTab('ranking')}
-               className="flex items-center gap-2 pl-1 cursor-pointer hover:opacity-80 transition-opacity"
-               title="Ver ranking e conquistas"
-             >
-               <Trophy className="w-5 h-5 text-amber-500" />
-               <div className="flex flex-col">
-                 <span className="text-lg font-bold text-slate-900 leading-none">{profile?.points || 0}</span>
-                 <span className="text-[8px] font-bold uppercase tracking-widest text-slate-400">Pontos</span>
-               </div>
-             </div>
-          </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('classes')}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+          >
+            <Calendar className="w-4 h-4" />
+            <span>Ver Grade de Aulas</span>
+          </button>
         </div>
       </header>
+
+      {/* Prominent Check-in & Attendance Metrics Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {/* Card 1: My Personal Check-ins */}
+        <div 
+          onClick={() => setActiveTab('history')}
+          className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Meus Check-ins</span>
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-black text-indigo-600 leading-none">{myTotalCheckIns}</span>
+              <span className="text-xs font-bold text-slate-500">treinos</span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium mt-1">
+              {uniqueDays} dias de tatame registrados
+            </p>
+          </div>
+        </div>
+
+        {/* Card 2: Grand Total Check-ins of All Users in the Dojo */}
+        <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total Geral no Dojô</span>
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <Activity className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-black text-emerald-600 leading-none">{totalDojoCheckIns}</span>
+              <span className="text-xs font-bold text-slate-500">check-ins</span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium mt-1">
+              Presenças de todos os alunos
+            </p>
+          </div>
+        </div>
+
+        {/* Card 3: Today's Dojo Attendance */}
+        <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Presenças Hoje</span>
+            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+              <Clock className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-black text-amber-600 leading-none">{todayDojoCheckIns}</span>
+              <span className="text-xs font-bold text-slate-500">hoje</span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium mt-1">
+              Alunos no tatame neste dia
+            </p>
+          </div>
+        </div>
+
+        {/* Card 4: Ranking & Graduation Points */}
+        <div 
+          onClick={() => setActiveTab('ranking')}
+          className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs hover:border-amber-400 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Pontuação</span>
+            <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Trophy className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-black text-rose-600 leading-none">{profile?.points || 0}</span>
+              <span className="text-xs font-bold text-slate-500">pontos</span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium mt-1">
+              Ranking & exame de graduação
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Immediate Check-in Section: Placed Prominently at the Top */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+            <h3 className="font-extrabold text-base sm:text-lg text-slate-900 tracking-tight">
+              Aulas de Hoje & Check-in no Tatame
+            </h3>
+          </div>
+          <span className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer" onClick={() => setActiveTab('classes')}>
+            Ver todos os horários →
+          </span>
+        </div>
+        <TodayClasses profile={profile} classes={classes} schedules={schedules} />
+      </div>
 
       {/* Quick Navigation Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -271,9 +455,6 @@ function StudentHome({
           </div>
         </button>
       </div>
-
-      {/* Check-in Section */}
-      <TodayClasses profile={profile} classes={classes} schedules={schedules} />
 
       {/* Mensalidade / Finance Area */}
       {isPaid ? (

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { db, doc } from '../../lib/firebase';
 import { collection, query, onSnapshot, where, collectionGroup, setDoc, deleteDoc } from 'firebase/firestore';
-import { Profile, ClassSession, Schedule, Presence, UserRole } from '../../types';
+import { Profile, ClassSession, Schedule, Presence, UserRole, ClassType } from '../../types';
 import { Star, Clock, Activity, Loader2, AlertCircle, Users, EyeOff, Lock, XCircle, RefreshCw, CheckCircle2, Search, Plus, Zap, QrCode } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { cn } from '../../lib/utils';
@@ -254,6 +254,47 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
       setLoading(null);
     }
   };
+
+  const handleQuickCheckInToday = async () => {
+    if (!profile) {
+      alert('Perfil não encontrado. Por favor, tente recarregar a página.');
+      return;
+    }
+    setLoading('quick-today');
+    try {
+      let todaySession = classes.find(c => c.date.startsWith(dateStr));
+      let classSessionId = todaySession?.id;
+
+      if (!classSessionId) {
+        const dayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+        const newSession: Omit<ClassSession, 'id'> = {
+          title: `Treino de ${dayNames[dayOfWeek]}`,
+          date: dateStr,
+          time: 'Treino do Dia',
+          professorId: 'admin',
+          type: ClassType.JUDO
+        };
+        classSessionId = await classesApi.create(newSession as any) || '';
+      }
+
+      if (classSessionId && profile?.id && profile.id !== 'undefined') {
+        const presenceRef = doc(db, `classes/${classSessionId}/presences`, profile.id);
+        await setDoc(presenceRef, {
+          memberId: profile.id,
+          classId: classSessionId,
+          timestamp: new Date().toISOString(),
+          checkInDate: dateStr,
+          pointsAwarded: 10
+        });
+        await profilesApi.update(profile.id, { points: (profile.points || 0) + 10 });
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert(`Erro ao realizar check-in: ${e.message || 'Erro desconhecido'}`);
+    } finally {
+      setLoading(null);
+    }
+  };
   
   // State for Admin/Professor Chamada/Presence Modal
   const [selectedClassForChamada, setSelectedClassForChamada] = useState<ClassSession | null>(null);
@@ -457,12 +498,60 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
     }
   };
 
+  const todaySessions = classes.filter(c => c.date.startsWith(dateStr) && !c.scheduleId && !c.isSpecial);
+
   const allItems = [
     ...specialClasses.map(c => ({ ...c, isClass: true as const })),
-    ...todaySchedules.map(s => ({ ...s, isSchedule: true as const }))
+    ...todaySchedules.map(s => ({ ...s, isSchedule: true as const })),
+    ...todaySessions.map(c => ({ ...c, isClass: true as const }))
   ];
 
-  if (allItems.length === 0) return null;
+  if (allItems.length === 0) {
+    const hasAnyCheckinToday = allTodayPresences.some(p => p.memberId === profile?.id);
+    const dayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+
+    return (
+      <div className="bg-white p-6 sm:p-8 rounded-[2rem] border border-slate-200/80 shadow-2xs mb-8">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+            <Activity className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="font-extrabold text-lg text-slate-900">Treino de Hoje • {dayNames[dayOfWeek]}</h3>
+            <p className="text-xs text-slate-400 font-medium">Tatame aberto para treino</p>
+          </div>
+        </div>
+
+        <div className="p-5 bg-slate-50 border border-slate-200/80 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <span className="text-xs font-bold text-slate-700 block">
+              {hasAnyCheckinToday ? "Você já registrou sua presença no treino de hoje!" : "Confirme sua presença no Dojô hoje para pontuar no ranking e acumular treinos."}
+            </span>
+            <span className="text-[11px] text-slate-400 font-medium block">
+              Cada presença confirmada acumula +10 pontos de graduação.
+            </span>
+          </div>
+
+          {hasAnyCheckinToday ? (
+            <div className="px-5 py-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl font-black text-xs flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>Presença Confirmada Hoje! (+10 pts)</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={loading === 'quick-today'}
+              onClick={handleQuickCheckInToday}
+              className="w-full sm:w-auto px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 transition-all cursor-pointer touch-manipulation"
+            >
+              {loading === 'quick-today' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              <span>Fazer Check-in no Treino (+10 pts)</span>
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white p-8 rounded-[2.5rem] border border-[#0a0a0a]/5 shadow-sm">
@@ -491,6 +580,40 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
           </button>
         )}
       </div>
+
+      {!canManageAttendance && (
+        <div className="mb-6 p-4 sm:p-5 rounded-2xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border-emerald-500/20">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="font-extrabold text-sm text-slate-900">
+                {allTodayPresences.some(p => p.memberId === profile?.id) 
+                  ? 'Você já confirmou sua presença no treino de hoje!' 
+                  : 'Tatame aberto para treino hoje!'}
+              </h4>
+              <p className="text-xs text-slate-500 font-medium">
+                {allTodayPresences.some(p => p.memberId === profile?.id) 
+                  ? 'Presença registrada com sucesso (+10 pontos acumulados).' 
+                  : 'Faça seu check-in com 1 clique para pontuar no ranking e acumular treinos.'}
+              </p>
+            </div>
+          </div>
+
+          {!allTodayPresences.some(p => p.memberId === profile?.id) && (
+            <button
+              type="button"
+              disabled={loading === 'quick-today'}
+              onClick={handleQuickCheckInToday}
+              className="w-full sm:w-auto px-5 py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 transition-all cursor-pointer touch-manipulation shrink-0"
+            >
+              {loading === 'quick-today' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              <span>Check-in Rápido Hoje (+10 pts)</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {isAdminOrProfessor && (
         <div className="mb-8 p-6 bg-slate-50 border border-slate-200/65 rounded-3xl flex flex-col lg:flex-row lg:items-center justify-between gap-4 animate-fade-in">
@@ -741,40 +864,50 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
                     </div>
                   ) : (
                     // Regular Student
-                    hasCheckedIn && confirmCancelId === id ? (
-                      <div className="mt-6 flex gap-2 w-full animate-fade-in/10">
-                        <button
-                          type="button"
-                          disabled={isLoading}
-                          onClick={() => handleCancelCheckIn(item as any, 'isClass' in item)}
-                          className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors hover:bg-rose-700 active:bg-rose-800 shadow-md shadow-rose-500/15 touch-manipulation select-none cursor-pointer"
-                        >
-                          {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin pointer-events-none" /> : <AlertCircle className="w-3.5 h-3.5 pointer-events-none" />}
-                          <span className="pointer-events-none">Confirmar</span>
-                        </button>
-                        <button
-                          type="button"
-                          disabled={isLoading}
-                          onClick={() => setConfirmCancelId(null)}
-                          className="flex-1 py-3 bg-slate-200 text-slate-700 rounded-xl font-bold text-[11px] uppercase tracking-wider flex items-center justify-center transition-colors hover:bg-slate-300 active:bg-slate-400 touch-manipulation select-none cursor-pointer"
-                        >
-                          <span className="pointer-events-none">Voltar</span>
-                        </button>
+                    hasCheckedIn ? (
+                      <div className="mt-6 flex flex-col gap-2">
+                        <div className="py-3 px-4 bg-emerald-50 border border-emerald-200 text-emerald-850 rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-2xs">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span>Presença Confirmada Hoje! (+10 pts)</span>
+                        </div>
+                        {confirmCancelId === id ? (
+                          <div className="flex gap-2 w-full animate-in fade-in duration-200">
+                            <button
+                              type="button"
+                              disabled={isLoading}
+                              onClick={() => handleCancelCheckIn(item as any, 'isClass' in item)}
+                              className="flex-1 py-2.5 bg-rose-600 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer hover:bg-rose-700 active:bg-rose-800 transition-colors shadow-xs"
+                            >
+                              {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                              <span>Confirmar Desmarcar</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmCancelId(null)}
+                              className="flex-1 py-2.5 bg-slate-200 text-slate-700 rounded-xl font-bold text-[10px] uppercase tracking-wider cursor-pointer hover:bg-slate-300 transition-colors"
+                            >
+                              <span>Voltar</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmCancelId(id)}
+                            className="text-[10px] text-slate-400 hover:text-rose-600 font-bold transition-colors cursor-pointer text-center py-1"
+                          >
+                            Desmarcar se marcou por engano
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <button
                         type="button"
                         disabled={isLoading}
-                        onClick={() => hasCheckedIn ? handleCancelCheckIn(item as any, 'isClass' in item) : handleCheckIn(item as any, 'isClass' in item)}
-                        className={cn(
-                          "mt-6 w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-colors touch-manipulation select-none cursor-pointer",
-                          hasCheckedIn 
-                            ? "bg-rose-500 text-white shadow-lg shadow-rose-500/20 hover:bg-rose-600 active:bg-rose-700" 
-                            : "bg-slate-900 text-white hover:bg-slate-800 active:bg-slate-950 shadow-lg"
-                        )}
+                        onClick={() => handleCheckIn(item as any, 'isClass' in item)}
+                        className="mt-6 w-full py-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 transition-all active:scale-[0.98] cursor-pointer touch-manipulation select-none"
                       >
-                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin pointer-events-none" /> : hasCheckedIn ? <AlertCircle className="w-4 h-4 pointer-events-none" /> : <Activity className="w-4 h-4 pointer-events-none" />}
-                        <span className="pointer-events-none">{hasCheckedIn ? 'Cancelar Check-in' : 'Fazer Check-in'}</span>
+                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin pointer-events-none" /> : <CheckCircle2 className="w-4 h-4 pointer-events-none" />}
+                        <span className="pointer-events-none">Fazer Check-in (+10 pts)</span>
                       </button>
                     )
                   )}

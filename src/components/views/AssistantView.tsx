@@ -213,34 +213,48 @@ function AssistantHome({
       </div>
 
       {/* Stats Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
-            <Users className="w-6 h-6" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold shrink-0">
+            <CheckCircle2 className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">Alunos Ativos</span>
-            <span className="text-2xl font-black text-slate-900">{activeStudents}</span>
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Total de Check-ins</span>
+            <span className="text-2xl font-black text-indigo-600 leading-none">{presences.length}</span>
+            <span className="text-[10px] text-slate-400 block mt-0.5">todos os alunos</span>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-            <CheckCircle2 className="w-6 h-6" />
+        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
+            <Clock className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">Presenças Hoje</span>
-            <span className="text-2xl font-black text-slate-900">{todayPresences}</span>
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Presenças Hoje</span>
+            <span className="text-2xl font-black text-emerald-600 leading-none">{todayPresences}</span>
+            <span className="text-[10px] text-slate-400 block mt-0.5">no tatame hoje</span>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
-            <GraduationCap className="w-6 h-6" />
+        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
+            <Users className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">Minhas Presenças</span>
-            <span className="text-2xl font-black text-slate-900">{myPresencesCount} treinos</span>
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Alunos Ativos</span>
+            <span className="text-2xl font-black text-slate-900 leading-none">{activeStudents}</span>
+            <span className="text-[10px] text-slate-400 block mt-0.5">cadastrados</span>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold shrink-0">
+            <GraduationCap className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Minhas Presenças</span>
+            <span className="text-2xl font-black text-amber-600 leading-none">{myPresencesCount}</span>
+            <span className="text-[10px] text-slate-400 block mt-0.5">meus treinos</span>
           </div>
         </div>
       </div>
