@@ -17,6 +17,7 @@ export default function ClassManagement({ classes, profiles }: { classes: ClassS
   const [isAddingSchedule, setIsAddingSchedule] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const [selectedSessionForPresence, setSelectedSessionForPresence] = useState<ClassSession | null>(null);
   const [activeView, setActiveView] = useState<'agenda' | 'history'>('agenda');
   const [schedules, setSchedules] = useState<Schedule[]>([]);
 
@@ -32,31 +33,45 @@ export default function ClassManagement({ classes, profiles }: { classes: ClassS
     return unsub;
   }, []);
 
-  const activeClass = classes.find(c => c.id === selectedClassId);
+  const DAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+  const activeClass = selectedSessionForPresence || classes.find(c => c.id === selectedClassId);
 
-  const handleCreateSessionFromSchedule = async (schedule: Schedule) => {
+  const handleOpenScheduleChamada = (schedule: Schedule) => {
     const now = new Date();
     const todayStr = now.getFullYear() + '-' + 
       String(now.getMonth() + 1).padStart(2, '0') + '-' + 
       String(now.getDate()).padStart(2, '0');
-    try {
-      const newSession: Omit<ClassSession, 'id'> = {
-        title: `Treino de ${DAYS[schedule.dayOfWeek]}`,
-        date: todayStr,
-        time: schedule.time,
-        professorId: schedule.professorId,
-        type: schedule.type,
-        scheduleId: schedule.id
-      };
-      const newId = await classesApi.create(newSession as any);
-      if (newId) setSelectedClassId(newId);
-    } catch (e) {
-      console.error(e);
-      alert('Erro ao criar sessão de aula.');
+    
+    // Check if session for this schedule + today exists
+    const existing = classes.find(c => (c.scheduleId === schedule.id || c.id === schedule.id) && c.date.startsWith(todayStr));
+    if (existing) {
+      setSelectedSessionForPresence(existing);
+      setSelectedClassId(existing.id);
+      return;
     }
-  };
 
-  const DAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+    // Create immediate session with deterministic ID so it renders in 0ms!
+    const generatedId = `session_${todayStr}_${schedule.id}`;
+    const dayName = (schedule.dayOfWeek >= 0 && schedule.dayOfWeek <= 6) ? DAYS[schedule.dayOfWeek] : 'Treino';
+    
+    const newSession: ClassSession = {
+      id: generatedId,
+      title: schedule.type ? `Treino de ${schedule.type}` : `Treino de ${dayName}`,
+      date: todayStr,
+      time: schedule.time || '19:00',
+      professorId: schedule.professorId || user?.uid || 'admin',
+      type: schedule.type || ClassType.JUDO,
+      scheduleId: schedule.id
+    };
+
+    setSelectedSessionForPresence(newSession);
+    setSelectedClassId(generatedId);
+
+    // Persist to Firestore in background
+    setDoc(doc(db, 'classes', generatedId), newSession, { merge: true }).catch(err => {
+      console.warn("Background class session save warning:", err);
+    });
+  };
 
   const getIconForType = (type: ClassType) => {
     switch (type) {
@@ -147,48 +162,35 @@ export default function ClassManagement({ classes, profiles }: { classes: ClassS
                         <div className="flex justify-between items-start mb-2">
                           <span className="text-[10px] font-black text-slate-900">{s.time}</span>
                           {canManage && (
-                            <div className="flex gap-1">
+                            <div className="flex items-center gap-1.5">
                               <button 
-                                onClick={() => {
-                                  // Find or create session for this schedule + today
-                                  const now = new Date();
-                                  const todayStr = now.getFullYear() + '-' + 
-                                    String(now.getMonth() + 1).padStart(2, '0') + '-' + 
-                                    String(now.getDate()).padStart(2, '0');
-                                  const existingSession = classes.find(c => c.scheduleId === s.id && c.date.startsWith(todayStr));
-                                  if (existingSession) {
-                                    setSelectedClassId(existingSession.id);
-                                  } else {
-                                    // Auto-create session if it's today's day
-                                    if (new Date().getDay() === s.dayOfWeek) {
-                                      handleCreateSessionFromSchedule(s);
-                                    } else {
-                                      alert('Você só pode abrir a chamada de treinos da grade semanal no dia correspondente.');
-                                    }
-                                  }
-                                }}
-                                className="p-1 text-slate-400 hover:text-indigo-600 transition-colors cursor-pointer"
-                                title="Fazer Chamada"
+                                type="button"
+                                onClick={() => handleOpenScheduleChamada(s)}
+                                className="px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer touch-manipulation active:scale-95"
+                                title="Fazer Chamada deste treino"
                               >
-                                <Users className="w-3 h-3" />
+                                <Users className="w-3.5 h-3.5" />
+                                <span>Chamada</span>
                               </button>
                               {isLeader && (
-                                <>
+                                <div className="flex items-center gap-0.5">
                                   <button 
+                                    type="button"
                                     onClick={() => setEditingSchedule(s)}
-                                    className="p-1 text-slate-400 hover:text-amber-500 transition-colors cursor-pointer"
+                                    className="p-1.5 text-slate-400 hover:text-amber-500 rounded-lg transition-colors cursor-pointer touch-manipulation"
                                     title="Editar Horário"
                                   >
-                                    <Pencil className="w-3 h-3" />
+                                    <Pencil className="w-3.5 h-3.5" />
                                   </button>
                                   <button 
+                                    type="button"
                                     onClick={() => setConfirmDeleteScheduleId(s.id)}
-                                    className="p-1 text-slate-300 hover:text-red-500 transition-colors cursor-pointer"
+                                    className="p-1.5 text-slate-300 hover:text-red-500 rounded-lg transition-colors cursor-pointer touch-manipulation"
                                     title="Excluir Horário"
                                   >
-                                    <Trash2 className="w-3 h-3" />
+                                    <Trash2 className="w-3.5 h-3.5" />
                                   </button>
-                                </>
+                                </div>
                               )}
                             </div>
                           )}
@@ -310,8 +312,15 @@ export default function ClassManagement({ classes, profiles }: { classes: ClassS
         {editingSchedule && (
           <EditScheduleModal schedule={editingSchedule} profiles={profiles} onClose={() => setEditingSchedule(null)} />
         )}
-        {selectedClassId && activeClass && (
-          <PresenceModal session={activeClass} profiles={profiles} onClose={() => setSelectedClassId(null)} />
+        {activeClass && (
+          <PresenceModal 
+            session={activeClass} 
+            profiles={profiles} 
+            onClose={() => {
+              setSelectedClassId(null);
+              setSelectedSessionForPresence(null);
+            }} 
+          />
         )}
       </AnimatePresence>
 
@@ -861,6 +870,17 @@ function PresenceModal({ session, profiles, onClose }: { session: ClassSession, 
 
   const togglePresence = async (studentId: string) => {
     const isPresent = presences[studentId];
+    // Optimistic instant toggle for 0ms responsiveness on iOS and Android
+    setPresences(prev => {
+      const next = { ...prev };
+      if (isPresent) {
+        delete next[studentId];
+      } else {
+        next[studentId] = true;
+      }
+      return next;
+    });
+
     try {
       const presenceId = studentId; // Unique per student in a class
       const presenceRef = doc(db, `classes/${session.id}/presences`, presenceId);
@@ -887,7 +907,8 @@ function PresenceModal({ session, profiles, onClose }: { session: ClassSession, 
         }
       }
     } catch (e) {
-      console.error(e);
+      console.error("Erro ao registrar presença:", e);
+      setPresences(prev => ({ ...prev, [studentId]: isPresent }));
     }
   };
 

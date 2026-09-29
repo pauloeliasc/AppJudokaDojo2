@@ -174,7 +174,7 @@ service cloud.firestore {
     match /classes/{classId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidClass(incoming());
-      allow update: if isProfessor() && isValidClass(incoming());
+      allow update: if (isProfessor() || isAssistant()) && isValidClass(incoming());
       allow delete: if isProfessor() || isAdmin();
     }
 
