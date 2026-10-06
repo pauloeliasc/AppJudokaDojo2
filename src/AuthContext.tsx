@@ -1,55 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth, db, doc } from './lib/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { setDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { User, UserRole, Profile } from './types';
-
-// Safe localStorage wrapper to prevent crashes in private mode or Android WebViews
-export const safeStorage = {
-  getItem: (key: string): string | null => {
-    try {
-      return typeof window !== 'undefined' ? localStorage.getItem(key) : null;
-    } catch {
-      return null;
-    }
-  },
-  setItem: (key: string, value: string): void => {
-    try {
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(key, value);
-      }
-    } catch {
-      // Ignore storage errors on restricted environments
-    }
-  },
-  removeItem: (key: string): void => {
-    try {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem(key);
-      }
-    } catch {
-      // Ignore
-    }
-  }
-};
-
-export const normalizeUserRole = (rawRole: any): UserRole => {
-  if (!rawRole) return UserRole.STUDENT;
-  const str = String(rawRole).toLowerCase().trim();
-  if (str === 'admin' || str === 'administrador' || str === 'administrator' || str === 'diretor') {
-    return UserRole.ADMIN;
-  }
-  if (str === 'professor' || str === 'sensei' || str === 'instrutor' || str === 'teacher') {
-    return UserRole.PROFESSOR;
-  }
-  if (str === 'assistant' || str === 'ajudante' || str === 'monitor' || str === 'auxiliar') {
-    return UserRole.ASSISTANT;
-  }
-  if (str === 'student' || str === 'aluno' || str === 'atleta') {
-    return UserRole.STUDENT;
-  }
-  return UserRole.STUDENT;
-};
 
 interface AuthContextType {
   user: User | null;
@@ -74,7 +27,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Function to switch active profile
   const setActiveProfileId = (id: string) => {
     if (auth.currentUser?.email) {
-      safeStorage.setItem(`activeProfile_${auth.currentUser.email.toLowerCase().trim()}`, id);
+      localStorage.setItem(`activeProfile_${auth.currentUser.email.toLowerCase().trim()}`, id);
     }
     setActiveProfileIdState(id);
   };
@@ -82,7 +35,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let unsubscribeFamily: (() => void) | null = null;
     let unsubscribeProfile: (() => void) | null = null;
-    let safetyTimeout: NodeJS.Timeout | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       // Clean up previous listeners
@@ -94,10 +46,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unsubscribeProfile();
         unsubscribeProfile = null;
       }
-      if (safetyTimeout) {
-        clearTimeout(safetyTimeout);
-        safetyTimeout = null;
-      }
 
       if (!firebaseUser) {
         setUser(null);
@@ -108,99 +56,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
+      setLoading(true);
       const rawEmail = firebaseUser.email?.toLowerCase().trim() || '';
       const email = rawEmail.replace(/\+reset\d+@/, '@');
-      const isAdminEmail = 
-        email === 'pauloeliasc@gmail.com' || 
-        email === 'pauloeliasc@hotmail.com' || 
-        email === 'judokadojoosasco@gmail.com' || 
-        email === 'admin@judokadojo.com';
-      const isProfessorEmail = email === 'sensei@judokadojo.com';
-      const isAssistantEmail = email === 'ajudante@judokadojo.com';
 
-      const initialRole = isAdminEmail 
-        ? UserRole.ADMIN 
-        : isProfessorEmail 
-        ? UserRole.PROFESSOR 
-        : isAssistantEmail 
-        ? UserRole.ASSISTANT 
-        : UserRole.STUDENT;
+      // Set up real-time listener for ALL profiles with this email (family members)
+      const q = query(collection(db, 'profiles'), where('email', '==', email));
+      unsubscribeFamily = onSnapshot(q, async (snapshot) => {
+        const list = snapshot.docs
+          .map(d => ({ id: d.id, ...d.data() } as Profile))
+          .filter(p => !p.isPointer);
 
-      // Provide immediate baseline user state to avoid freezing on mobile network
-      setUser((prev) => prev || {
-        uid: firebaseUser.uid,
-        id: firebaseUser.uid,
-        email: firebaseUser.email || '',
-        name: firebaseUser.displayName || email.split('@')[0] || 'Usuário',
-        role: initialRole,
-        username: email.split('@')[0],
-        isApproved: true,
-        status: 'active'
-      });
+        setAvailableProfiles(list);
 
-      // Safety timeout: Never leave the user stuck on loading spinner longer than 3.5 seconds
-      safetyTimeout = setTimeout(() => {
-        setLoading(false);
-      }, 3500);
+        // Compute/decide active profile of the family
+        let selectedId: string | null = null;
+        const storedId = localStorage.getItem(`activeProfile_${email}`);
 
-      try {
-        // Set up real-time listener for ALL profiles with this email (family members)
-        const q = query(collection(db, 'profiles'), where('email', '==', email));
-        unsubscribeFamily = onSnapshot(q, (snapshot) => {
-          if (safetyTimeout) {
-            clearTimeout(safetyTimeout);
-            safetyTimeout = null;
-          }
-
-          const seen = new Set<string>();
-          const list: Profile[] = [];
-          for (const d of snapshot.docs) {
-            const item = { ...d.data(), id: d.id } as Profile;
-            if (!item.isPointer && !seen.has(item.id)) {
-              seen.add(item.id);
-              list.push(item);
-            }
-          }
-
-          setAvailableProfiles(list);
-
-          // Compute/decide active profile of the family
-          let selectedId: string | null = null;
-          const storedId = safeStorage.getItem(`activeProfile_${email}`);
-
-          if (storedId && list.some(p => p.id === storedId)) {
-            selectedId = storedId;
+        if (storedId && list.some(p => p.id === storedId)) {
+          selectedId = storedId;
+        } else {
+          // If no stored selection, try matching UID or userId
+          const mainMatch = list.find(p => p.id === firebaseUser.uid || p.userId === firebaseUser.uid);
+          if (mainMatch) {
+            selectedId = mainMatch.id;
+          } else if (list.length > 0) {
+            selectedId = list[0].id;
           } else {
-            // If no stored selection, try matching UID or userId
-            const mainMatch = list.find(p => p.id === firebaseUser.uid || p.userId === firebaseUser.uid);
-            if (mainMatch) {
-              selectedId = mainMatch.id;
-            } else if (list.length > 0) {
-              selectedId = list[0].id;
-            } else {
-              selectedId = firebaseUser.uid;
-            }
+            selectedId = firebaseUser.uid;
           }
+        }
 
-          setActiveProfileIdState(selectedId);
-        }, (err) => {
-          console.warn("Notice: Family listener fallback:", err);
-          setActiveProfileIdState(firebaseUser.uid);
-          setAvailableProfiles([]);
-          setLoading(false);
-        });
-      } catch (e) {
-        console.warn("Notice: query profiles catch:", e);
+        setActiveProfileIdState(selectedId);
+      }, (err) => {
+        console.error("Error listening to family profiles:", err);
+        // Fallback if permission / index fails
         setActiveProfileIdState(firebaseUser.uid);
-        setLoading(false);
-      }
+        setAvailableProfiles([]);
+      });
     });
 
     return () => {
       unsubscribeAuth();
       if (unsubscribeFamily) unsubscribeFamily();
       if (unsubscribeProfile) unsubscribeProfile();
-      if (safetyTimeout) clearTimeout(safetyTimeout);
     };
   }, []);
 
@@ -210,74 +109,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const firebaseUser = auth.currentUser;
 
     if (!firebaseUser || !activeProfileId) {
-      if (!firebaseUser) {
-        setLoading(false);
-      }
       return;
     }
 
     const rawEmail = firebaseUser.email?.toLowerCase().trim() || '';
     const email = rawEmail.replace(/\+reset\d+@/, '@');
-    const isAdminEmail = 
-      email === 'pauloeliasc@gmail.com' || 
-      email === 'pauloeliasc@hotmail.com' || 
-      email === 'judokadojoosasco@gmail.com' || 
-      email === 'admin@judokadojo.com';
-    const isProfessorEmail = email === 'sensei@judokadojo.com';
-    const isAssistantEmail = email === 'ajudante@judokadojo.com';
+    const isAdminEmail = email === 'pauloeliasc@gmail.com' || email === 'judokadojoosasco@gmail.com';
 
     unsubscribeProfile = onSnapshot(doc(db, 'profiles', activeProfileId), async (docSnapshot) => {
       if (docSnapshot.exists()) {
         const pData = docSnapshot.data();
         
-        // Link with UID on the primary profile document if not already set
-        if (pData.userId !== firebaseUser.uid) {
+        // Link with UID if it's not set
+        if (activeProfileId === firebaseUser.uid && pData.userId !== firebaseUser.uid) {
           try {
             await setDoc(doc(db, 'profiles', activeProfileId), { userId: firebaseUser.uid }, { merge: true });
           } catch (e) {
-            console.warn("Could not link active user with UID on profile:", e);
+            console.warn("Could not link active user with UID:", e);
           }
         }
 
-        const parsedRole = normalizeUserRole(pData.role);
-        const effectiveRole = isAdminEmail 
-          ? UserRole.ADMIN 
-          : isProfessorEmail 
-          ? UserRole.PROFESSOR 
-          : isAssistantEmail 
-          ? UserRole.ASSISTANT 
-          : parsedRole;
-
-        // Auto-heal profile role in database if stored with non-canonical value
-        if (pData.role !== effectiveRole) {
-          try {
-            await setDoc(doc(db, 'profiles', activeProfileId), { role: effectiveRole }, { merge: true });
-          } catch (healErr) {
-            console.warn("Could not auto-heal profile role:", healErr);
-          }
-        }
-
-        // Keep users/uid doc in sync for rule checks
-        try {
-          await setDoc(doc(db, 'profiles', firebaseUser.uid), {
-            id: firebaseUser.uid,
-            userId: firebaseUser.uid,
-            role: effectiveRole,
-            fullName: pData.fullName || pData.name || '',
-            email: firebaseUser.email || pData.email || '',
-            targetProfileId: activeProfileId,
-            isPointer: activeProfileId !== firebaseUser.uid,
-            updatedAt: new Date().toISOString()
-          }, { merge: true });
-
-          await setDoc(doc(db, 'users', firebaseUser.uid), {
-            role: effectiveRole
-          }, { merge: true });
-        } catch (syncErr) {
-          console.warn("Could not sync auth profile/user document for rules:", syncErr);
-        }
-
-        const currentProf = { id: activeProfileId, ...pData, role: effectiveRole } as Profile;
+        const isProfileAdmin = pData.role === UserRole.ADMIN || isAdminEmail;
+        const currentProf = { id: activeProfileId, ...pData } as Profile;
         setActiveProfile(currentProf);
 
         setUser({
@@ -285,37 +138,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: activeProfileId,
           email: firebaseUser.email || '',
           name: pData.fullName || pData.name || pData.username || email.split('@')[0],
-          role: effectiveRole,
+          role: isProfileAdmin ? UserRole.ADMIN : (pData.role || UserRole.STUDENT),
           username: pData.username || email.split('@')[0],
-          isApproved: (isAdminEmail || isProfessorEmail || isAssistantEmail) ? true : (pData.isApproved !== false),
-          status: (isAdminEmail || isProfessorEmail || isAssistantEmail) ? 'active' : (pData.status || 'active')
+          isApproved: isProfileAdmin ? true : (pData.isApproved ?? false),
+          status: isProfileAdmin ? 'active' : (pData.status ?? 'pending')
         });
       } else {
         setActiveProfile(null);
         // Create matching fallback profile if it doesn't exist yet
-        const defaultRole = isAdminEmail 
-          ? UserRole.ADMIN 
-          : isProfessorEmail 
-          ? UserRole.PROFESSOR 
-          : isAssistantEmail 
-          ? UserRole.ASSISTANT 
-          : UserRole.STUDENT;
-
-        const defaultGrade = (isAdminEmail || isProfessorEmail) 
-          ? 'Preta' 
-          : isAssistantEmail 
-          ? 'Marrom' 
-          : 'Branca';
-
         const newUser: User = {
           uid: firebaseUser.uid,
           id: activeProfileId,
           email: firebaseUser.email || '',
           name: firebaseUser.displayName || email.split('@')[0] || 'Usuário',
-          role: defaultRole,
+          role: isAdminEmail ? UserRole.ADMIN : UserRole.STUDENT,
           username: email.split('@')[0],
-          isApproved: true,
-          status: 'active'
+          isApproved: isAdminEmail ? true : false,
+          status: isAdminEmail ? 'active' : 'pending'
         };
 
         setUser(newUser);
@@ -329,16 +168,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               email: newUser.email,
               role: newUser.role,
               username: newUser.username,
-              isApproved: true,
-              status: 'active',
+              isApproved: newUser.isApproved,
+              status: newUser.status,
               enrollmentDate: new Date().toISOString().split('T')[0],
-              points: 50,
-              currentGrade: defaultGrade
+              points: 0,
+              currentGrade: isAdminEmail ? 'Preta' : 'Branca'
             });
-
-            await setDoc(doc(db, 'users', firebaseUser.uid), {
-              role: defaultRole
-            }, { merge: true });
           } catch (e) {
             console.error("Failed to auto-create profile doc:", e);
           }
@@ -346,7 +181,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       setLoading(false);
     }, (err) => {
-      console.warn("Notice: Error listening to profile doc:", err);
+      console.error("Error listening to selected active profile:", err);
       setLoading(false);
     });
 
@@ -356,25 +191,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [activeProfileId]);
 
   const logout = async () => {
-    try {
-      await auth.signOut();
-      setUser(null);
-      setActiveProfile(null);
-      setAvailableProfiles([]);
-      setActiveProfileIdState(null);
-      setLoading(false);
-    } catch (e) {
-      console.error("Logout error:", e);
-    }
+    await auth.signOut();
   };
 
   const refreshUser = async () => {
-    // Manually trigger refresh when needed
-    const firebaseUser = auth.currentUser;
-    if (firebaseUser && activeProfileId) {
-      // Touch state to force re-render
-      setLoading(false);
-    }
+    // Left as compatibility stub or manually triggers re-fetch if needed
   };
 
   return (

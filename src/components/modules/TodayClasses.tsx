@@ -1,14 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { db, doc } from '../../lib/firebase';
 import { collection, query, onSnapshot, where, collectionGroup, setDoc, deleteDoc } from 'firebase/firestore';
-import { Profile, ClassSession, Schedule, Presence, UserRole, ClassType } from '../../types';
-import { Star, Clock, Activity, Loader2, AlertCircle, Users, EyeOff, Lock, XCircle, RefreshCw, CheckCircle2, Search, Plus, Zap, QrCode } from 'lucide-react';
+import { Profile, ClassSession, Schedule, Presence, UserRole } from '../../types';
+import { Star, Clock, Activity, Loader2, AlertCircle, Users, EyeOff, Lock, XCircle, RefreshCw, CheckCircle2, Search, Plus } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { cn } from '../../lib/utils';
 import { profilesApi, classesApi } from '../../services/firestoreService';
 import { motion, AnimatePresence } from 'motion/react';
-import QRCodeAttendanceScanner from './QRCodeAttendanceScanner';
-import { useAuth } from '../../AuthContext';
 
 interface TodayClassesProps {
   profile: Profile | null;
@@ -17,12 +15,10 @@ interface TodayClassesProps {
 }
 
 export default function TodayClasses({ profile, classes, schedules }: TodayClassesProps) {
-  const { user } = useAuth();
   const [loading, setLoading] = useState<string | null>(null);
   const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
   const [allTodayPresences, setAllTodayPresences] = useState<Presence[]>([]);
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
-  const [showScannerModal, setShowScannerModal] = useState<boolean>(false);
 
   const today = new Date();
   const dayOfWeek = today.getDay();
@@ -35,10 +31,7 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
   const [panelClassId, setPanelClassId] = useState<string>('');
   const [panelPresences, setPanelPresences] = useState<Presence[]>([]);
 
-  const effectiveRole = (profile?.role || user?.role || '').toLowerCase();
-  const isAdminOrProfessor = ['admin', 'administrador', 'professor', 'sensei'].includes(effectiveRole);
-  const isAssistant = ['assistant', 'ajudante', 'monitor'].includes(effectiveRole);
-  const canManageAttendance = isAdminOrProfessor || isAssistant;
+  const isAdminOrProfessor = profile?.role === UserRole.ADMIN || profile?.role === UserRole.PROFESSOR;
 
   // Subscribe in real-time to check-ins matching target date and target physical classes
   useEffect(() => {
@@ -127,16 +120,9 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
   // Fetch all profiles for mapping names in check-in panel
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'profiles'), (snapshot) => {
-      const seen = new Set<string>();
-      const list: Profile[] = [];
-      for (const doc of snapshot.docs) {
-        const item = { ...doc.data(), id: doc.id } as Profile;
-        if (!item.isPointer && !seen.has(item.id)) {
-          seen.add(item.id);
-          list.push(item);
-        }
-      }
-      setAllProfiles(list);
+      setAllProfiles(snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Profile))
+        .filter(p => !p.isPointer));
     });
     return unsub;
   }, []);
@@ -257,137 +243,89 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
       setLoading(null);
     }
   };
-
-  const handleQuickCheckInToday = async () => {
-    if (!profile) {
-      alert('Perfil não encontrado. Por favor, tente recarregar a página.');
-      return;
-    }
-    setLoading('quick-today');
-    try {
-      let todaySession = classes.find(c => c.date.startsWith(dateStr));
-      let classSessionId = todaySession?.id;
-
-      if (!classSessionId) {
-        const dayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
-        const newSession: Omit<ClassSession, 'id'> = {
-          title: `Treino de ${dayNames[dayOfWeek]}`,
-          date: dateStr,
-          time: 'Treino do Dia',
-          professorId: 'admin',
-          type: ClassType.JUDO
-        };
-        classSessionId = await classesApi.create(newSession as any) || '';
-      }
-
-      if (classSessionId && profile?.id && profile.id !== 'undefined') {
-        const presenceRef = doc(db, `classes/${classSessionId}/presences`, profile.id);
-        await setDoc(presenceRef, {
-          memberId: profile.id,
-          classId: classSessionId,
-          timestamp: new Date().toISOString(),
-          checkInDate: dateStr,
-          pointsAwarded: 10
-        });
-        await profilesApi.update(profile.id, { points: (profile.points || 0) + 10 });
-      }
-    } catch (e: any) {
-      console.error(e);
-      alert(`Erro ao realizar check-in: ${e.message || 'Erro desconhecido'}`);
-    } finally {
-      setLoading(null);
-    }
-  };
   
   // State for Admin/Professor Chamada/Presence Modal
   const [selectedClassForChamada, setSelectedClassForChamada] = useState<ClassSession | null>(null);
   const [isChamadaModalOpen, setIsChamadaModalOpen] = useState(false);
   const [loadingChamadaId, setLoadingChamadaId] = useState<string | null>(null);
 
-  const handleOpenChamada = (item: Schedule | ClassSession, isSpecial: boolean) => {
+  const handleOpenChamada = async (item: Schedule | ClassSession, isSpecial: boolean) => {
+    const itemId = isSpecial ? (item as ClassSession).id : (item as Schedule).id;
+    setLoadingChamadaId(itemId);
     try {
-      const isAlreadySession = 'date' in item && 'time' in item && !('dayOfWeek' in item);
-      let classSession: ClassSession;
-
-      if (isAlreadySession) {
+      let classSession: ClassSession | undefined;
+      if (isSpecial) {
         classSession = item as ClassSession;
       } else {
         const schedule = item as Schedule;
-        // Check if there is an existing session in classes matching this schedule today
-        const existing = classes.find(c => (c.scheduleId === schedule.id || c.id === schedule.id) && c.date.startsWith(dateStr));
-        if (existing) {
-          classSession = existing;
-        } else {
-          // Instant deterministic ID so no duplicate is created and modal opens instantly in 0ms!
-          const generatedId = `session_${dateStr}_${schedule.id}`;
-          const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-          const dayName = (schedule.dayOfWeek !== undefined && schedule.dayOfWeek >= 0 && schedule.dayOfWeek <= 6)
-            ? dayNames[schedule.dayOfWeek]
-            : 'Treino';
-
-          classSession = {
-            id: generatedId,
-            title: schedule.type ? `Treino de ${schedule.type}` : `Treino de ${dayName}`,
+        // Find existing class session for this schedule today
+        classSession = classes.find(c => c.scheduleId === schedule.id && c.date.startsWith(dateStr));
+        if (!classSession) {
+          // Create a new session
+          const newSession: Omit<ClassSession, 'id'> = {
+            title: `Treino de ${['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'][schedule.dayOfWeek]}`,
             date: dateStr,
-            time: schedule.time || '19:00',
-            professorId: schedule.professorId || profile?.id || 'admin',
-            type: schedule.type || ClassType.JUDO,
+            time: schedule.time,
+            professorId: schedule.professorId || 'admin',
+            type: schedule.type,
             scheduleId: schedule.id
           };
-
-          // Persist to Firestore in background without delaying user UI
-          setDoc(doc(db, 'classes', generatedId), classSession, { merge: true }).catch(err => {
-            console.warn("Background class session registration warning:", err);
-          });
+          const newId = await classesApi.create(newSession as any) || '';
+          if (!newId) throw new Error('Não foi possível criar a sessão de aula.');
+          // Construct class session object
+          classSession = {
+            id: newId,
+            ...newSession
+          } as ClassSession;
         }
       }
-
       setSelectedClassForChamada(classSession);
       setIsChamadaModalOpen(true);
     } catch (e: any) {
-      console.error("Erro ao abrir chamada:", e);
+      console.error(e);
+      alert(`Erro ao abrir chamada: ${e.message || 'Erro desconhecido'}`);
+    } finally {
+      setLoadingChamadaId(null);
     }
   };
 
-  const handleOpenChamadaRetroactive = (item: Schedule | ClassSession, isSpecial: boolean) => {
+  const handleOpenChamadaRetroactive = async (item: Schedule | ClassSession, isSpecial: boolean) => {
+    const itemId = isSpecial ? (item as ClassSession).id : (item as Schedule).id;
+    setLoadingChamadaId(itemId);
     try {
-      const isAlreadySession = 'date' in item && 'time' in item && !('dayOfWeek' in item);
-      let classSession: ClassSession;
-
-      if (isAlreadySession) {
+      let classSession: ClassSession | undefined;
+      if (isSpecial) {
         classSession = item as ClassSession;
       } else {
         const schedule = item as Schedule;
-        const existing = classes.find(c => (c.scheduleId === schedule.id || c.id === schedule.id) && c.date === panelDate);
-        if (existing) {
-          classSession = existing;
-        } else {
-          const generatedId = `session_${panelDate}_${schedule.id}`;
-          const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-          const dayName = (schedule.dayOfWeek !== undefined && schedule.dayOfWeek >= 0 && schedule.dayOfWeek <= 6)
-            ? dayNames[schedule.dayOfWeek]
-            : 'Treino';
-
-          classSession = {
-            id: generatedId,
-            title: schedule.type ? `Treino de ${schedule.type}` : `Treino de ${dayName}`,
+        // Find existing class session for this schedule on panelDate
+        classSession = classes.find(c => c.scheduleId === schedule.id && c.date === panelDate);
+        if (!classSession) {
+          // Create a new session for the selected retroactive date
+          const newSession: Omit<ClassSession, 'id'> = {
+            title: `Treino de ${['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'][schedule.dayOfWeek]}`,
             date: panelDate,
-            time: schedule.time || '19:00',
-            professorId: schedule.professorId || profile?.id || 'admin',
-            type: schedule.type || ClassType.JUDO,
+            time: schedule.time,
+            professorId: schedule.professorId || 'admin',
+            type: schedule.type,
             scheduleId: schedule.id
           };
-
-          setDoc(doc(db, 'classes', generatedId), classSession, { merge: true }).catch(err => {
-            console.warn("Background retroactive class registration warning:", err);
-          });
+          const newId = await classesApi.create(newSession as any) || '';
+          if (!newId) throw new Error('Não foi possível criar a sessão de aula retroativa.');
+          // Construct class session object
+          classSession = {
+            id: newId,
+            ...newSession
+          } as ClassSession;
         }
       }
-
       setSelectedClassForChamada(classSession);
       setIsChamadaModalOpen(true);
     } catch (e: any) {
-      console.error("Erro ao abrir chamada retroativa:", e);
+      console.error(e);
+      alert(`Erro ao abrir chamada retroativa: ${e.message || 'Erro desconhecido'}`);
+    } finally {
+      setLoadingChamadaId(null);
     }
   };
 
@@ -508,181 +446,21 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
     }
   };
 
-  const todaySessions = classes.filter(c => c.date.startsWith(dateStr) && !c.scheduleId && !c.isSpecial);
-
   const allItems = [
     ...specialClasses.map(c => ({ ...c, isClass: true as const })),
-    ...todaySchedules.map(s => ({ ...s, isSchedule: true as const })),
-    ...todaySessions.map(c => ({ ...c, isClass: true as const }))
+    ...todaySchedules.map(s => ({ ...s, isSchedule: true as const }))
   ];
 
-  if (allItems.length === 0) {
-    const hasAnyCheckinToday = allTodayPresences.some(p => p.memberId === profile?.id);
-    const dayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
-
-    const handleOpenGeneralChamada = () => {
-      const generatedId = `session_${dateStr}_general`;
-      const generalSession: ClassSession = {
-        id: generatedId,
-        title: `Treino de ${dayNames[dayOfWeek]}`,
-        date: dateStr,
-        time: '19:00',
-        professorId: profile?.id || 'admin',
-        type: ClassType.JUDO
-      };
-      setDoc(doc(db, 'classes', generatedId), generalSession, { merge: true }).catch(console.error);
-      setSelectedClassForChamada(generalSession);
-      setIsChamadaModalOpen(true);
-    };
-
-    return (
-      <div className="bg-white p-6 sm:p-8 rounded-[2rem] border border-slate-200/80 shadow-2xs mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <Activity className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="font-extrabold text-lg text-slate-900">Treino de Hoje • {dayNames[dayOfWeek]}</h3>
-              <p className="text-xs text-slate-400 font-medium">Tatame aberto para treino</p>
-            </div>
-          </div>
-
-          {canManageAttendance && (
-            <button
-              type="button"
-              onClick={handleOpenGeneralChamada}
-              className="px-5 py-3.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-indigo-600/15 transition-all cursor-pointer touch-manipulation active:scale-[0.98]"
-            >
-              <Users className="w-4 h-4" />
-              <span>Fazer Chamada / Presenças</span>
-            </button>
-          )}
-        </div>
-
-        <div className="p-5 bg-slate-50 border border-slate-200/80 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <span className="text-xs font-bold text-slate-700 block">
-              {hasAnyCheckinToday ? "Você já registrou sua presença no treino de hoje!" : "Confirme sua presença no Dojô hoje para pontuar no ranking e acumular treinos."}
-            </span>
-            <span className="text-[11px] text-slate-400 font-medium block">
-              Cada presença confirmada acumula +10 pontos de graduação.
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            {hasAnyCheckinToday ? (
-              <div className="px-5 py-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl font-black text-xs flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>Presença Confirmada Hoje! (+10 pts)</span>
-              </div>
-            ) : (
-              <button
-                type="button"
-                disabled={loading === 'quick-today'}
-                onClick={handleQuickCheckInToday}
-                className="w-full sm:w-auto px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 transition-all cursor-pointer touch-manipulation active:scale-95"
-              >
-                {loading === 'quick-today' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                <span>Fazer Check-in no Treino (+10 pts)</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        <AnimatePresence>
-          {isChamadaModalOpen && selectedClassForChamada && (
-            <ChamadaModal
-              session={selectedClassForChamada}
-              profiles={allProfiles}
-              onClose={() => {
-                setIsChamadaModalOpen(false);
-                setSelectedClassForChamada(null);
-              }}
-            />
-          )}
-        </AnimatePresence>
-      </div>
-    );
-  }
+  if (allItems.length === 0) return null;
 
   return (
     <div className="bg-white p-8 rounded-[2.5rem] border border-[#0a0a0a]/5 shadow-sm">
-      {/* Real-time Camera Attendance Scanner Modal */}
-      {showScannerModal && (
-        <QRCodeAttendanceScanner 
-          classes={classes} 
-          profiles={allProfiles} 
-          onClose={() => setShowScannerModal(false)} 
-        />
-      )}
-
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
           <Activity className="w-6 h-6 text-indigo-500" />
           <h3 className="font-bold text-xl uppercase tracking-tight">Treinos Disponíveis Hoje</h3>
         </div>
-
-        {canManageAttendance && (
-          <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
-            <button
-              type="button"
-              onClick={() => {
-                if (allItems.length > 0) {
-                  handleOpenChamada(allItems[0], 'isClass' in allItems[0]);
-                }
-              }}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all active:scale-95 cursor-pointer touch-manipulation"
-              title="Fazer chamada da turma de hoje"
-            >
-              <Users className="w-4 h-4" />
-              <span>Fazer Chamada</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowScannerModal(true)}
-              className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all active:scale-95 cursor-pointer touch-manipulation"
-            >
-              <Zap className="w-4 h-4 fill-current" />
-              <span>Scanner QR</span>
-            </button>
-          </div>
-        )}
       </div>
-
-      {!canManageAttendance && (
-        <div className="mb-6 p-4 sm:p-5 rounded-2xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border-emerald-500/20">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-sm">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-            <div>
-              <h4 className="font-extrabold text-sm text-slate-900">
-                {allTodayPresences.some(p => p.memberId === profile?.id) 
-                  ? 'Você já confirmou sua presença no treino de hoje!' 
-                  : 'Tatame aberto para treino hoje!'}
-              </h4>
-              <p className="text-xs text-slate-500 font-medium">
-                {allTodayPresences.some(p => p.memberId === profile?.id) 
-                  ? 'Presença registrada com sucesso (+10 pontos acumulados).' 
-                  : 'Faça seu check-in com 1 clique para pontuar no ranking e acumular treinos.'}
-              </p>
-            </div>
-          </div>
-
-          {!allTodayPresences.some(p => p.memberId === profile?.id) && (
-            <button
-              type="button"
-              disabled={loading === 'quick-today'}
-              onClick={handleQuickCheckInToday}
-              className="w-full sm:w-auto px-5 py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 transition-all cursor-pointer touch-manipulation shrink-0"
-            >
-              {loading === 'quick-today' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-              <span>Check-in Rápido Hoje (+10 pts)</span>
-            </button>
-          )}
-        </div>
-      )}
 
       {isAdminOrProfessor && (
         <div className="mb-8 p-6 bg-slate-50 border border-slate-200/65 rounded-3xl flex flex-col lg:flex-row lg:items-center justify-between gap-4 animate-fade-in">
@@ -797,7 +575,7 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
                   <div className="mt-2 flex items-center gap-1.5">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     <span className="text-[10px] font-bold text-slate-500 tracking-tight">
-                      {canManageAttendance 
+                      {isAdminOrProfessor 
                         ? `${presenceCounts[classSession.id] || 0} ${(presenceCounts[classSession.id] || 0) === 1 ? 'aluno presente' : 'alunos presentes'}`
                         : hasCheckedIn ? 'Você está presente' : 'Você não realizou check-in'
                       }
@@ -805,14 +583,14 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
                   </div>
                 )}
 
-                {!isClassCanceled && classSession && (canManageAttendance ? classPresences.length > 0 : hasCheckedIn) && (
+                {!isClassCanceled && classSession && (isAdminOrProfessor ? classPresences.length > 0 : hasCheckedIn) && (
                   <div className="mt-4 pt-3 border-t border-slate-200/50">
                     <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-                      <span>{canManageAttendance ? `No treino agora (${classPresences.length})` : 'Seu check-in'}</span>
+                      <span>{isAdminOrProfessor ? `No treino agora (${classPresences.length})` : 'Seu check-in'}</span>
                     </div>
                     <div className="flex flex-wrap gap-1.5 max-h-[72px] overflow-y-auto pr-1">
                       {classPresences
-                        .filter(p => canManageAttendance || (profile && p.memberId === profile.id))
+                        .filter(p => isAdminOrProfessor || (profile && p.memberId === profile.id))
                         .map((p, pIdx) => {
                           const studentProfile = allProfiles.find(prof => prof.id === p.memberId);
                           const isMe = profile && p.memberId === profile.id;
@@ -863,115 +641,102 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
               {isClassCanceled ? (
                 isAdminOrProfessor ? (
                   <button
-                    type="button"
                     disabled={isLoading}
                     onClick={() => handleReactivateClass(item as any, 'isClass' in item)}
-                    className="mt-6 w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-colors shadow-md shadow-emerald-500/15 cursor-pointer touch-manipulation active:scale-[0.98]"
+                    className="mt-6 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-500/15 cursor-pointer"
                   >
                     {loading === `reactivate-${id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                    <span>Reativar Aula</span>
+                    Reativar Aula
                   </button>
                 ) : (
-                  <div className="mt-6 w-full py-3.5 bg-slate-100 border border-slate-200 text-slate-400 font-extrabold text-[10px] uppercase tracking-widest text-center rounded-xl cursor-not-allowed">
+                  <div className="mt-6 w-full py-3.5 bg-slate-100 border border-slate-200 text-slate-400 font-extrabold text-[10px] uppercase tracking-widest text-center rounded-xl cursor-not-allowed select-none">
                     Aula Indisponível
                   </div>
                 )
               ) : (
                 <>
-                  {canManageAttendance ? (
+                  {isAdminOrProfessor ? (
                     <div className="mt-6 space-y-2">
                       <button
-                        type="button"
+                        disabled={loadingChamadaId === id}
                         onClick={() => handleOpenChamada(item, 'isClass' in item)}
-                        className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-2xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2.5 transition-all shadow-md shadow-indigo-600/20 cursor-pointer touch-manipulation active:scale-[0.98]"
+                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-md shadow-indigo-600/10 active:scale-[0.99] cursor-pointer"
                       >
-                        <Users className="w-4 h-4" />
-                        <span>Fazer Chamada / Presenças</span>
+                        {loadingChamadaId === id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Users className="w-4 h-4" />
+                        )}
+                        Fazer Chamada / Presenças
                       </button>
 
                       {hasCheckedIn && confirmCancelId === id ? (
                         <div className="flex gap-2 w-full animate-fade-in/10">
                           <button
-                            type="button"
                             disabled={isLoading}
                             onClick={() => handleCancelCheckIn(item as any, 'isClass' in item)}
-                            className="flex-1 py-2.5 bg-rose-600 text-white rounded-lg font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors hover:bg-rose-700 active:bg-rose-800 touch-manipulation cursor-pointer active:scale-95"
+                            className="flex-1 py-2 bg-rose-600 text-white rounded-lg font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all hover:bg-rose-700"
                           >
                             {isLoading ? <Loader2 className="w-3 animate-spin" /> : <AlertCircle className="w-3 h-3" />}
-                            <span>Confirmar</span>
+                            Confirmar
                           </button>
                           <button
-                            type="button"
                             disabled={isLoading}
                             onClick={() => setConfirmCancelId(null)}
-                            className="flex-1 py-2.5 bg-slate-200 text-slate-700 rounded-lg font-bold text-[10px] uppercase tracking-wider flex items-center justify-center transition-colors hover:bg-slate-300 active:bg-slate-400 touch-manipulation cursor-pointer active:scale-95"
+                            className="flex-1 py-2 bg-slate-200 text-slate-700 rounded-lg font-bold text-[10px] uppercase tracking-wider flex items-center justify-center transition-all hover:bg-slate-300"
                           >
-                            <span>Voltar</span>
+                            Voltar
                           </button>
                         </div>
                       ) : (
                         <button
-                          type="button"
                           disabled={isLoading}
                           onClick={() => hasCheckedIn ? handleCancelCheckIn(item as any, 'isClass' in item) : handleCheckIn(item as any, 'isClass' in item)}
                           className={cn(
-                            "w-full py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors touch-manipulation cursor-pointer active:scale-95",
+                            "w-full py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all",
                             hasCheckedIn 
-                              ? "bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 active:bg-rose-200" 
-                              : "bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700"
+                              ? "bg-rose-50 text-rose-600 border border-rose-150/70 hover:bg-rose-100" 
+                              : "bg-slate-100 hover:bg-slate-200 text-slate-700"
                           )}
                         >
                           {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : hasCheckedIn ? <AlertCircle className="w-3.5 h-3.5" /> : <Activity className="w-3.5 h-3.5" />}
-                          <span>{hasCheckedIn ? 'Remover Meu Check-in' : 'Marcar Meu Check-in'}</span>
+                          {hasCheckedIn ? 'Remover Meu Check-in' : 'Marcar Meu Check-in'}
                         </button>
                       )}
                     </div>
                   ) : (
                     // Regular Student
-                    hasCheckedIn ? (
-                      <div className="mt-6 flex flex-col gap-2">
-                        <div className="py-3 px-4 bg-emerald-50 border border-emerald-200 text-emerald-850 rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-2xs">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                          <span>Presença Confirmada Hoje! (+10 pts)</span>
-                        </div>
-                        {confirmCancelId === id ? (
-                          <div className="flex gap-2 w-full animate-in fade-in duration-200">
-                            <button
-                              type="button"
-                              disabled={isLoading}
-                              onClick={() => handleCancelCheckIn(item as any, 'isClass' in item)}
-                              className="flex-1 py-2.5 bg-rose-600 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer hover:bg-rose-700 active:bg-rose-800 transition-colors shadow-xs"
-                            >
-                              {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <AlertCircle className="w-3.5 h-3.5" />}
-                              <span>Confirmar Desmarcar</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmCancelId(null)}
-                              className="flex-1 py-2.5 bg-slate-200 text-slate-700 rounded-xl font-bold text-[10px] uppercase tracking-wider cursor-pointer hover:bg-slate-300 transition-colors"
-                            >
-                              <span>Voltar</span>
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setConfirmCancelId(id)}
-                            className="text-[10px] text-slate-400 hover:text-rose-600 font-bold transition-colors cursor-pointer text-center py-1"
-                          >
-                            Desmarcar se marcou por engano
-                          </button>
-                        )}
+                    hasCheckedIn && confirmCancelId === id ? (
+                      <div className="mt-6 flex gap-2 w-full animate-fade-in/10">
+                        <button
+                          disabled={isLoading}
+                          onClick={() => handleCancelCheckIn(item as any, 'isClass' in item)}
+                          className="flex-1 py-3 bg-rose-600 text-white rounded-xl font-bold text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all hover:bg-rose-700 shadow-md shadow-rose-500/15"
+                        >
+                          {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                          Confirmar
+                        </button>
+                        <button
+                          disabled={isLoading}
+                          onClick={() => setConfirmCancelId(null)}
+                          className="flex-1 py-3 bg-slate-200 text-slate-700 rounded-xl font-bold text-[11px] uppercase tracking-wider flex items-center justify-center transition-all hover:bg-slate-300"
+                        >
+                          Voltar
+                        </button>
                       </div>
                     ) : (
                       <button
-                        type="button"
                         disabled={isLoading}
-                        onClick={() => handleCheckIn(item as any, 'isClass' in item)}
-                        className="mt-6 w-full py-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 transition-all active:scale-[0.98] cursor-pointer touch-manipulation select-none"
+                        onClick={() => hasCheckedIn ? handleCancelCheckIn(item as any, 'isClass' in item) : handleCheckIn(item as any, 'isClass' in item)}
+                        className={cn(
+                          "mt-6 w-full py-3 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all",
+                          hasCheckedIn 
+                            ? "bg-rose-500 text-white shadow-lg shadow-rose-500/20 hover:bg-rose-600" 
+                            : "bg-[#0a0a0a] text-[#ffffff] hover:scale-[1.02] shadow-lg"
+                        )}
                       >
-                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin pointer-events-none" /> : <CheckCircle2 className="w-4 h-4 pointer-events-none" />}
-                        <span className="pointer-events-none">Fazer Check-in (+10 pts)</span>
+                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : hasCheckedIn ? <AlertCircle className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
+                        {hasCheckedIn ? 'Cancelar Check-in' : 'Fazer Check-in'}
                       </button>
                     )
                   )}
@@ -1031,7 +796,7 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
         })}
       </div>
 
-      {canManageAttendance && (
+      {isAdminOrProfessor && (
         <div className="mt-12 border-t border-slate-100 pt-10">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8">
             <div className="flex items-center gap-3">
@@ -1137,10 +902,10 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
                       </div>
                       
                       <button
-                        type="button"
+                        disabled={loadingChamadaId === id}
                         onClick={() => handleOpenChamadaRetroactive(item, 'isClass' in item)}
                         className={cn(
-                          "mt-4 w-full py-3 rounded-xl font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all cursor-pointer border touch-manipulation active:scale-[0.98]",
+                          "mt-4 w-full py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all cursor-pointer border",
                           hasSession 
                             ? isCanceled 
                               ? "bg-rose-50 text-rose-600 border-rose-200/50 hover:bg-rose-100" 
@@ -1148,13 +913,15 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
                             : "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-100/40"
                         )}
                       >
-                        <Users className="w-3.5 h-3.5" />
-                        <span>
-                          {hasSession 
-                            ? isCanceled ? 'Ver/Reabrir Chamada' : 'Fazer/Alterar Chamada' 
-                            : 'Iniciar Chamada'
-                          }
-                        </span>
+                        {loadingChamadaId === id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Users className="w-3.5 h-3.5" />
+                        )}
+                        {hasSession 
+                          ? isCanceled ? 'Ver/Reabrir Chamada' : 'Fazer/Alterar Chamada' 
+                          : 'Iniciar Chamada'
+                        }
                       </button>
                     </div>
                   );
@@ -1270,10 +1037,9 @@ export default function TodayClasses({ profile, classes, schedules }: TodayClass
 function ChamadaModal({ session, profiles, onClose }: { session: ClassSession, profiles: Profile[], onClose: () => void }) {
   const [presences, setPresences] = useState<Record<string, boolean>>({});
   const [searchTerm, setSearchTerm] = useState('');
-  const [isBatchOperating, setIsBatchOperating] = useState(false);
 
   const students = profiles
-    .filter(p => !p.role || p.role === UserRole.STUDENT || p.role === UserRole.ASSISTANT)
+    .filter(p => !p.role || p.role === UserRole.STUDENT)
     .sort((a, b) => {
       const parseNum = (val?: string | number) => {
         if (val === undefined || val === null || val === '') return Infinity;
@@ -1304,23 +1070,13 @@ function ChamadaModal({ session, profiles, onClose }: { session: ClassSession, p
 
   const togglePresence = async (studentId: string) => {
     const isPresent = presences[studentId];
-    // Optimistic instant toggle (0ms latency on iOS & Android)
-    setPresences(prev => {
-      const next = { ...prev };
-      if (isPresent) {
-        delete next[studentId];
-      } else {
-        next[studentId] = true;
-      }
-      return next;
-    });
-
     try {
-      const presenceId = studentId;
+      const presenceId = studentId; // Unique per student in a class
       const presenceRef = doc(db, `classes/${session.id}/presences`, presenceId);
       
       if (isPresent) {
         await deleteDoc(presenceRef);
+        // Remove points
         const currentStudent = profiles.find(p => p.id === studentId);
         if (currentStudent) {
           await profilesApi.update(studentId, { points: Math.max(0, (currentStudent.points || 0) - 10) });
@@ -1333,93 +1089,27 @@ function ChamadaModal({ session, profiles, onClose }: { session: ClassSession, p
           checkInDate: session.date,
           pointsAwarded: 10
         });
+        // Add points for attending
         const currentStudent = profiles.find(p => p.id === studentId);
         if (currentStudent) {
           await profilesApi.update(studentId, { points: (currentStudent.points || 0) + 10 });
         }
       }
     } catch (e: any) {
-      console.error("Erro ao registrar presença:", e);
-      // Revert optimistic update if failed
-      setPresences(prev => ({ ...prev, [studentId]: isPresent }));
-    }
-  };
-
-  const handleMarkAllPresent = async () => {
-    if (isBatchOperating) return;
-    setIsBatchOperating(true);
-    const targetStudents = filteredStudents.length > 0 ? filteredStudents : students;
-    
-    // Optimistically mark all in local state
-    const newPresences = { ...presences };
-    targetStudents.forEach(s => {
-      newPresences[s.id] = true;
-    });
-    setPresences(newPresences);
-
-    try {
-      for (const s of targetStudents) {
-        if (!presences[s.id]) {
-          const presenceRef = doc(db, `classes/${session.id}/presences`, s.id);
-          await setDoc(presenceRef, {
-            memberId: s.id,
-            classId: session.id,
-            timestamp: new Date().toISOString(),
-            checkInDate: session.date,
-            pointsAwarded: 10
-          });
-          const currentStudent = profiles.find(p => p.id === s.id);
-          if (currentStudent) {
-            await profilesApi.update(s.id, { points: (currentStudent.points || 0) + 10 });
-          }
-        }
-      }
-    } catch (e) {
-      console.error("Erro ao marcar todos presentes:", e);
-    } finally {
-      setIsBatchOperating(false);
-    }
-  };
-
-  const handleClearAllPresences = async () => {
-    if (isBatchOperating) return;
-    setIsBatchOperating(true);
-    const targetStudents = filteredStudents.length > 0 ? filteredStudents : students;
-
-    // Optimistically clear in local state
-    const newPresences = { ...presences };
-    targetStudents.forEach(s => {
-      delete newPresences[s.id];
-    });
-    setPresences(newPresences);
-
-    try {
-      for (const s of targetStudents) {
-        if (presences[s.id]) {
-          const presenceRef = doc(db, `classes/${session.id}/presences`, s.id);
-          await deleteDoc(presenceRef);
-          const currentStudent = profiles.find(p => p.id === s.id);
-          if (currentStudent) {
-            await profilesApi.update(s.id, { points: Math.max(0, (currentStudent.points || 0) - 10) });
-          }
-        }
-      }
-    } catch (e) {
-      console.error("Erro ao limpar presenças:", e);
-    } finally {
-      setIsBatchOperating(false);
+      console.error(e);
+      alert(`Erro ao registrar presença: ${e.message || 'Erro desconhecido'}`);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center p-3 sm:p-4">
+    <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
       {/* Backdrop */}
       <motion.div 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
-        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm cursor-pointer"
+        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
       />
       
       {/* Modal Card */}
@@ -1427,9 +1117,9 @@ function ChamadaModal({ session, profiles, onClose }: { session: ClassSession, p
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative bg-white w-full max-w-xl max-h-[90dvh] h-[85vh] rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden z-10 border border-slate-100"
+        className="relative bg-white w-full max-w-xl h-[85vh] rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden z-10 border border-slate-100"
       >
-        <div className="p-5 sm:p-7 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+        <div className="p-6 sm:p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div>
             <div className="flex items-center gap-2">
               <span className="bg-indigo-100 text-indigo-700 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full">
@@ -1439,134 +1129,90 @@ function ChamadaModal({ session, profiles, onClose }: { session: ClassSession, p
                 {Object.keys(presences).length} Presentes
               </span>
             </div>
-            <h4 className="font-extrabold text-lg text-slate-900 mt-1.5 leading-tight">
+            <h4 className="font-extrabold text-lg text-slate-900 mt-2 leading-tight">
               {session.title || 'Sessão de Treino'}
             </h4>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
               {session.time} • {session.date.split('-').reverse().join('/')}
             </p>
           </div>
           <button 
-            type="button"
             onClick={onClose} 
-            className="p-3 hover:bg-white rounded-2xl border border-slate-200/50 hover:border-slate-300 transition-all text-slate-400 hover:text-slate-600 cursor-pointer touch-manipulation active:scale-95"
-            title="Fechar Chamada"
+            className="p-2.5 hover:bg-white rounded-2xl border border-slate-200/40 hover:border-slate-200 transition-all text-slate-400 hover:text-slate-600 cursor-pointer"
           >
             <Plus className="rotate-45 w-5 h-5" />
           </button>
         </div>
         
-        {/* Search & Batch Actions */}
-        <div className="px-5 sm:px-7 py-3 border-b border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white">
-          <div className="flex items-center gap-2 flex-1 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200/60">
-            <Search className="w-4 h-4 text-slate-400 shrink-0" />
-            <input
-              type="text"
-              placeholder="Pesquisar por nome ou nº de chamada..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full text-xs font-bold text-slate-700 bg-transparent outline-none"
-            />
-            {searchTerm && (
-              <button 
-                type="button"
-                onClick={() => setSearchTerm('')}
-                className="text-[10px] font-black text-slate-400 hover:text-slate-600 px-1.5 py-0.5 rounded bg-slate-200/60 uppercase transition-all"
-              >
-                Limpar
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              disabled={isBatchOperating}
-              onClick={handleMarkAllPresent}
-              className="flex-1 sm:flex-initial px-3 py-2 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-700 border border-emerald-200 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer touch-manipulation active:scale-95 flex items-center justify-center gap-1.5"
+        {/* Search */}
+        <div className="px-6 pb-4 pt-1 border-b border-slate-100 flex items-center gap-2">
+          <Search className="w-4 h-4 text-slate-400 shrink-0" />
+          <input
+            type="text"
+            placeholder="Pesquisar por nome ou nº de chamada..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full text-xs font-bold text-slate-700 bg-transparent py-3 outline-none"
+          />
+          {searchTerm && (
+            <button 
+              onClick={() => setSearchTerm('')}
+              className="text-[10px] font-black text-slate-400 hover:text-slate-600 px-2 py-1 rounded bg-slate-100 uppercase transition-all"
             >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Marcar Todos</span>
+              Limpar
             </button>
-            <button
-              type="button"
-              disabled={isBatchOperating}
-              onClick={handleClearAllPresences}
-              className="flex-1 sm:flex-initial px-3 py-2 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer touch-manipulation active:scale-95 flex items-center justify-center gap-1.5"
-            >
-              <span>Desmarcar</span>
-            </button>
-          </div>
+          )}
         </div>
         
-        {/* Student list with smooth touch scrolling */}
-        <div className="p-4 sm:p-5 flex-1 overflow-y-auto space-y-2.5 overscroll-contain">
+        <div className="p-4 flex-1 overflow-y-auto space-y-2.5">
           {filteredStudents.length > 0 ? (
             filteredStudents.map((s, idx) => (
               <button 
                 key={`${s.id}-${idx}`}
-                type="button"
                 onClick={() => togglePresence(s.id)}
                 className={cn(
-                  "w-full flex items-center justify-between p-3.5 sm:p-4 rounded-2xl transition-all border-2 cursor-pointer touch-manipulation active:scale-[0.98]",
+                  "w-full flex items-center justify-between p-4 rounded-2xl transition-all border-2 active:scale-[0.98] cursor-pointer",
                   presences[s.id] 
-                    ? "bg-emerald-50 border-emerald-300 text-emerald-950 shadow-xs" 
-                    : "bg-white border-slate-100 hover:border-slate-200 hover:bg-slate-50/70 text-slate-700"
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-900" 
+                    : "bg-white border-slate-50 hover:border-slate-100 hover:bg-slate-50 text-slate-700"
                 )}
               >
-                <div className="flex items-center gap-3.5 text-left min-w-0">
+                <div className="flex items-center gap-4 text-left">
                   <div className={cn(
-                    "w-10 h-10 rounded-full flex items-center justify-center text-xs font-black shadow-inner shrink-0", 
-                    presences[s.id] ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-500"
+                    "w-10 h-10 rounded-full flex items-center justify-center text-xs font-black shadow-inner", 
+                    presences[s.id] ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-400"
                   )}>
                     {s.fullName.charAt(0)}
                   </div>
-                  <div className="min-w-0">
-                    <span className="font-bold block text-sm flex items-center gap-1.5 truncate">
+                  <div>
+                    <span className="font-bold block text-sm flex items-center gap-1.5">
                       {s.callNumber && (
-                        <span className="bg-slate-100 text-slate-700 font-black text-[9px] px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
+                        <span className="bg-slate-100 text-slate-600 font-black text-[9px] px-1 py-0.5 rounded border border-slate-200/50">
                           Nº {s.callNumber}
                         </span>
                       )}
-                      <span className="truncate">{s.fullName}</span>
+                      {s.fullName}
                     </span>
-                    <span className="text-[9px] font-bold uppercase text-slate-400 tracking-tight block">
-                      {s.currentGrade || 'Graduação não informada'}
-                    </span>
+                    <span className="text-[9px] font-bold uppercase text-slate-400 tracking-tighter">{s.currentGrade}</span>
                   </div>
                 </div>
-                <div className="shrink-0 ml-2">
-                  {presences[s.id] ? (
-                    <div className="flex items-center gap-1 text-emerald-700 font-black text-xs">
-                      <CheckCircle2 className="w-6 h-6 text-emerald-600" />
-                    </div>
-                  ) : (
-                    <div className="w-6 h-6 rounded-full border-2 border-slate-200 flex items-center justify-center" />
-                  )}
-                </div>
+                {presences[s.id] && <CheckCircle2 className="w-6 h-6 text-emerald-600" />}
               </button>
             ))
           ) : (
-            <div className="py-14 text-center">
-              <p className="text-slate-400 font-bold text-sm">
-                {students.length === 0 ? "Nenhum aluno cadastrado no Dojô." : "Nenhum aluno encontrado para a pesquisa."}
+            <div className="py-12 text-center">
+              <p className="text-slate-400 font-bold">
+                {students.length === 0 ? "Nenhum aluno cadastrado." : "Nenhum aluno encontrado para a pesquisa."}
               </p>
             </div>
           )}
         </div>
         
-        <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-indigo-600">
-            <Star className="w-4 h-4 fill-indigo-600 text-indigo-600 shrink-0" />
-            <p className="text-[10px] font-bold uppercase tracking-wider">+10 pontos concedidos por treino</p>
+        <div className="p-6 sm:p-8 border-t border-slate-100 bg-slate-50/50">
+          <div className="flex items-center gap-3 text-indigo-600 justify-center">
+            <Star className="w-5 h-5 fill-indigo-600 text-indigo-600" />
+            <p className="text-[10px] font-black uppercase tracking-widest text-center">Presenças confirmadas ganham 10 pontos de recompensa.</p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer touch-manipulation active:scale-95"
-          >
-            Concluir Chamada
-          </button>
         </div>
       </motion.div>
     </div>

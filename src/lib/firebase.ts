@@ -1,52 +1,16 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { 
-  initializeAuth, 
-  indexedDBLocalPersistence, 
-  browserLocalPersistence, 
-  getAuth, 
-  Auth 
-} from 'firebase/auth';
-import { 
-  initializeFirestore, 
-  persistentLocalCache, 
-  persistentMultipleTabManager, 
-  getFirestore, 
-  Firestore, 
-  doc as originalDoc, 
-  getDocFromCache, 
-  getDocFromServer 
-} from 'firebase/firestore';
+import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { initializeFirestore, doc as originalDoc, getDocFromCache, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-
-// Configure resilient Firestore with IndexedDB Multi-Tab persistent local cache
-let firestoreInstance: Firestore;
-try {
-  firestoreInstance = initializeFirestore(app, {
-    localCache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager()
-    }),
-  }, firebaseConfig.firestoreDatabaseId);
-} catch (err) {
-  // If already initialized or cache failed, fallback to getFirestore
-  firestoreInstance = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-}
-export const db = firestoreInstance;
-
-// Configure resilient Auth with IndexedDB and Browser LocalStorage persistence
-let authInstance: Auth;
-try {
-  authInstance = initializeAuth(app, {
-    persistence: [indexedDBLocalPersistence, browserLocalPersistence]
-  });
-} catch (err) {
-  authInstance = getAuth(app);
-}
-export const auth = authInstance;
+const app = initializeApp(firebaseConfig);
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+}, firebaseConfig.firestoreDatabaseId);
+export const auth = getAuth(app);
 
 // Safe doc function wrapper to prevent segment count / offline errors on bad IDs
-export function doc(database: any, collectionPath: string, ...documentPaths: string[]) {
+export function doc(db: any, collectionPath: string, ...documentPaths: string[]) {
   // Safe validation of documentPath segments
   const sanitizedPaths = documentPaths.map(p => {
     if (!p || typeof p !== 'string' || p.trim() === '' || p === 'undefined' || p === 'null') {
@@ -57,11 +21,26 @@ export function doc(database: any, collectionPath: string, ...documentPaths: str
   });
 
   if (sanitizedPaths.length === 0) {
-    return originalDoc(database, collectionPath, '_invalid_path_fallback_');
+    return originalDoc(db, collectionPath, '_invalid_path_fallback_');
   }
 
-  return originalDoc(database, collectionPath, ...sanitizedPaths);
+  return originalDoc(db, collectionPath, ...sanitizedPaths);
 }
+
+// Simple connection test as per instructions
+async function testConnection() {
+  try {
+    // Attempting to get a dummy doc to verify connection
+    await getDocFromServer(originalDoc(db, '_connection_test_', 'ping'));
+  } catch (error: any) {
+    if (error?.message?.includes('the client is offline')) {
+      console.error("Please check your Firebase configuration. The client is offline.");
+    }
+    // Normal permission-denied or not-found is fine, it means we reached the server
+  }
+}
+
+testConnection();
 
 export enum OperationType {
   CREATE = 'create',
@@ -86,7 +65,7 @@ export interface FirestoreErrorInfo {
       providerId?: string | null;
       email?: string | null;
     }[];
-  };
+  }
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {

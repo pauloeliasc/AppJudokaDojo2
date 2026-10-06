@@ -1,247 +1,234 @@
 import React, { useState } from 'react';
 import { auth, db, doc } from '../lib/firebase';
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword 
-} from 'firebase/auth';
-import { getDoc } from 'firebase/firestore';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, updateProfile, GoogleAuthProvider, OAuthProvider, signInWithPopup } from 'firebase/auth';
+import { setDoc, getDocs, collection, query, where, getDoc } from 'firebase/firestore';
+import { UserRole } from '../types';
 import { motion } from 'motion/react';
-import { 
-  User as UserIcon, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Loader2
-} from 'lucide-react';
+import { User as UserIcon, Lock, Shield, GraduationCap, Users, Fingerprint, Chrome, Mail, Globe } from 'lucide-react';
+import { cn } from '../lib/utils';
+import { authenticateWithBiometrics, isBiometricsSupported, hasRegisteredBiometrics } from '../services/biometricService';
+import BiometricPrompt from './modules/BiometricPrompt';
 
 export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [biometricSupported, setBiometricSupported] = useState(false);
+  const [hasBiometrics, setHasBiometrics] = useState(false);
+  const [showBiometricPrompt, setShowBiometricPrompt] = useState(false);
+
+  React.useEffect(() => {
+    isBiometricsSupported().then(setBiometricSupported);
+    setHasBiometrics(hasRegisteredBiometrics());
+  }, []);
+
+  const handleSocialLogin = async (providerName: string) => {
+    setLoading(true);
+    setError('');
+    setMessage('');
+    try {
+      let provider;
+      if (providerName === 'google') {
+        provider = new GoogleAuthProvider();
+      } else if (providerName === 'microsoft') {
+        provider = new OAuthProvider('microsoft.com');
+      } else if (providerName === 'yahoo') {
+        provider = new OAuthProvider('yahoo.com');
+      } else {
+        throw new Error('Provedor não suportado');
+      }
+
+      const result = await signInWithPopup(auth, provider);
+      if (result.user) {
+        setMessage(`Conectado com sucesso como ${result.user.email}!`);
+      }
+    } catch (e: any) {
+      console.error(e);
+      if (e.code === 'auth/popup-closed-by-user') {
+        setError('O login foi cancelado porque a janela de autenticação foi fechada.');
+      } else if (e.code === 'auth/operation-not-allowed') {
+         setError(`Atenção: O login por '${providerName}' precisa estar ativado no console do seu Firebase na seção Authentication > Sign-in method.`);
+      } else {
+        setError(`Falha ao conectar com ${providerName}: ${e.message || 'Erro desconhecido'}`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBiometricLogin = () => {
+    setError('');
+    setMessage('');
+    setShowBiometricPrompt(true);
+  };
+
+  const handleBiometricSuccess = async () => {
+    setShowBiometricPrompt(false);
+    setLoading(true);
+    try {
+      const result = await authenticateWithBiometrics();
+      if (result.success && result.email && result.password) {
+        setMessage(`Biometria reconhecida! Conectando como ${result.email}...`);
+        await signInWithEmailAndPassword(auth, result.email, result.password);
+      }
+    } catch (e: any) {
+      console.error(e);
+      setError('Erro no login biométrico: ' + (e.message || 'Verifique se você registrou a biometria nas configurações do seu perfiln.'));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-
-    const rawInput = username.trim();
-    if (!rawInput) {
-      setError('Por favor, informe seu e-mail de acesso ou usuário.');
-      return;
-    }
-
-    if (!password) {
-      setError('Por favor, digite sua senha.');
-      return;
-    }
-
     setLoading(true);
+    setError('');
+    setMessage('');
 
-    let emailToUse = rawInput.toLowerCase();
-    // Allow quick handle resolution if user didn't enter full domain
-    if (!emailToUse.includes('@')) {
-      if (emailToUse === 'admin' || emailToUse === 'administrador') {
-        emailToUse = 'admin@judokadojo.com';
-      } else if (emailToUse === 'sensei' || emailToUse === 'professor') {
-        emailToUse = 'sensei@judokadojo.com';
-      } else if (emailToUse === 'ajudante' || emailToUse === 'assistente') {
-        emailToUse = 'ajudante@judokadojo.com';
-      } else if (emailToUse === 'pauloeliasc' || emailToUse === 'paulo') {
-        emailToUse = 'pauloeliasc@gmail.com';
-      } else {
-        emailToUse = `${emailToUse.replace(/\s+/g, '.')}@judokadojo.com`;
+    const emailLower = username.trim().toLowerCase();
+
+    // Check if there is an active reset email mapping (so students with reset passwords can login)
+    let loginEmail = emailLower;
+    try {
+      const resetSnap = await getDoc(doc(db, 'auth_resets', emailLower));
+      if (resetSnap.exists()) {
+        loginEmail = resetSnap.data().resetAuthEmail;
       }
+    } catch (e) {
+      console.warn("Could not check auth_resets mapping:", e);
     }
-
-    // Safety timeout: Never leave user stuck on loading spinner longer than 9s
-    const timeoutId = setTimeout(() => {
-      setLoading(false);
-      setError('A conexão com o servidor demorou a responder. Verifique sua rede e tente novamente.');
-    }, 9000);
 
     try {
-      // 1. Check if there is an active reset/alias email in auth_resets
-      try {
-        const resetSnap = await getDoc(doc(db, 'auth_resets', emailToUse));
-        if (resetSnap.exists() && resetSnap.data()?.resetAuthEmail) {
-          emailToUse = resetSnap.data().resetAuthEmail;
-        }
-      } catch (checkErr) {
-        // Non-blocking query failure
-      }
-
-      // 2. Direct Firebase Authentication sign-in
-      try {
-        await signInWithEmailAndPassword(auth, emailToUse, password);
-        clearTimeout(timeoutId);
-        return;
-      } catch (signInErr: any) {
-        const code = signInErr?.code || '';
-        
-        // If account is not in Firebase Auth yet (e.g. pre-registered student),
-        // attempt on-demand account activation using their email and password
-        if (
-          code === 'auth/user-not-found' || 
-          code === 'auth/invalid-credential' ||
-          signInErr?.message?.includes('invalid-credential')
-        ) {
-          try {
-            await createUserWithEmailAndPassword(auth, emailToUse, password);
-            clearTimeout(timeoutId);
-            return;
-          } catch (createErr: any) {
-            if (createErr.code === 'auth/email-already-in-use') {
-              // The account exists in Auth, but the provided password was incorrect
-              clearTimeout(timeoutId);
-              setError('E-mail ou senha incorretos. Por favor, confira os dados digitados.');
-              return;
-            } else if (createErr.code === 'auth/weak-password') {
-              clearTimeout(timeoutId);
-              setError('A senha deve ter no mínimo 6 caracteres.');
-              return;
-            }
-          }
-        }
-        throw signInErr;
-      }
-    } catch (err: any) {
-      clearTimeout(timeoutId);
-      console.error("Login attempt failed:", err);
-      const code = err?.code || '';
+      await signInWithEmailAndPassword(auth, loginEmail, password);
+    } catch (e: any) {
+      console.log("Auth login attempt notice:", e.message || e);
+      const code = e.code || (e.message?.includes('auth/invalid-credential') ? 'auth/invalid-credential' : '');
       
-      if (
-        code === 'auth/invalid-credential' || 
-        code === 'auth/user-not-found' || 
-        code === 'auth/wrong-password' ||
-        err?.message?.includes('invalid-credential')
-      ) {
-        setError('E-mail ou senha incorretos. Por favor, confira os dados digitados.');
+      if (code === 'auth/operation-not-allowed') {
+        setError('Erro: O provedor de E-mail/Senha não está ativo no Console do Firebase.');
+      } else if (code === 'auth/invalid-credential' || code === 'auth/user-not-found' || code === 'auth/wrong-password') {
+        setError('E-mail ou senha incorretos. Se esqueceu sua senha, peça para um administrador redefini-la.');
       } else if (code === 'auth/invalid-email') {
-        setError('Formato de e-mail inválido. Digite um e-mail válido (ex: seu@email.com).');
+        setError('Por favor, insira um e-mail válido.');
       } else if (code === 'auth/too-many-requests') {
-        setError('Muitas tentativas malsucedidas. Aguarde 1 minuto e tente novamente.');
-      } else if (code === 'auth/network-request-failed') {
-        setError('Falha de conexão com os servidores. Verifique sua rede e tente novamente.');
+        setError('Muitas tentativas malsucedidas. Tente novamente mais tarde ou solicite a redefinição de senha ao administrador.');
       } else {
-        setError('Não foi possível entrar: ' + (err?.message || 'Verifique seus dados e tente novamente.'));
+        setError('Erro no acesso: ' + (e.message || 'Dados inválidos.'));
       }
     } finally {
-      clearTimeout(timeoutId);
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-[100dvh] flex items-center justify-center bg-slate-900 p-4 sm:p-6 font-sans relative overflow-hidden select-none">
-      {/* Background Japanese Calligraphy Accent */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-slate-800/20 text-[20rem] font-black select-none pointer-events-none tracking-widest">
-        柔道
-      </div>
-
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 font-sans">
       <motion.div 
-        initial={{ opacity: 0, y: 15 }}
+        initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25 }}
-        className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-100 relative z-10 my-4"
+        className="w-full max-w-md bg-white rounded-3xl overflow-hidden shadow-2xl shadow-indigo-500/5 border border-slate-200"
       >
-        <div className="p-7 sm:p-9">
-          {/* Logo & Header */}
-          <div className="flex justify-center mb-4">
-            <div className="w-20 h-20 bg-slate-50 border border-slate-200/80 rounded-3xl flex items-center justify-center shadow-md p-2">
-              <img 
-                src="/logo.png" 
-                alt="Judoka Dojô" 
-                className="w-16 h-16 object-contain"
-                loading="eager"
-              />
+        <div className="p-10">
+          <div className="flex justify-center mb-8">
+            <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center shadow-xl border border-slate-100 overflow-hidden">
+               <img 
+                 src="./logo.png" 
+                 alt="Judoka Dojô" 
+                 className="w-22 h-22 object-contain"
+                 referrerPolicy="no-referrer"
+               />
             </div>
           </div>
           
-          <h1 className="text-2xl sm:text-3xl font-black text-center text-slate-900 tracking-tight">Judoka Dojô</h1>
-          <p className="text-slate-400 text-center mt-1 font-semibold text-xs uppercase tracking-wider">
-            Gestão de Academia & Tatame Digital
+          <h1 className="text-3xl font-bold text-center text-slate-900 tracking-tight">Judoka Dojô</h1>
+          <p className="text-slate-400 text-center mt-1.5 font-medium text-sm">
+            Gestão Inteligente de Academia
           </p>
 
-          {/* Error Feedback */}
-          {error && (
-            <div className="mt-5 p-3.5 rounded-2xl text-xs font-bold text-center border bg-rose-50 text-rose-700 border-rose-200 flex items-center gap-2 animate-in fade-in duration-200">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-              <span className="flex-1 text-left">{error}</span>
-            </div>
-          )}
-
-          {/* Direct, Streamlined Login Form */}
-          <form onSubmit={handleLogin} noValidate className="mt-6 space-y-4">
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 block ml-1">
-                E-mail ou Usuário
-              </label>
-              <div className="relative">
-                <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input 
-                  type="text"
-                  inputMode="email"
-                  autoComplete="username email"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 pl-10 pr-4 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-base transition-all font-medium text-slate-800"
-                  placeholder="seu@email.com"
-                  required
-                />
+          <form onSubmit={handleLogin} className="mt-8 space-y-6">
+            {error && (
+              <div className="p-4 rounded-xl text-xs font-bold text-center border bg-rose-50 text-rose-700 border-rose-100">
+                {error}
               </div>
-            </div>
+            )}
+            
+            {message && (
+              <div className="p-4 rounded-xl text-xs font-bold text-center border bg-emerald-50 text-emerald-700 border-emerald-100">
+                {message}
+              </div>
+            )}
 
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 block ml-1">
-                Senha
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input 
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 pl-10 pr-11 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-base transition-all font-medium text-slate-800"
-                  placeholder="••••••••"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(prev => !prev)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">
+                  E-mail
+                </label>
+                <div className="relative">
+                  <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                  <input 
+                    type="email"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 pl-11 pr-4 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-base transition-all"
+                    placeholder="seu@email.com"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5 ml-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Senha
+                  </label>
+                </div>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                  <input 
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 pl-11 pr-4 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-base transition-all"
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
               </div>
             </div>
 
             <button 
               type="submit"
               disabled={loading}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white py-3.5 rounded-2xl font-black text-sm tracking-wide transition-all shadow-md shadow-indigo-600/20 active:scale-[0.98] disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2 mt-4"
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold transition-all shadow-lg shadow-indigo-600/20 active:scale-[0.98] disabled:opacity-50 cursor-pointer"
             >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Conectando ao Dojô...</span>
-                </>
-              ) : (
-                <>
-                  <span>Entrar no Sistema</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
+              {loading ? 'Processando...' : 'Entrar no Sistema'}
             </button>
-          </form>
 
-          <div className="mt-6 pt-4 border-t border-slate-100 text-center">
-            <p className="text-[11px] text-slate-400 font-medium">
-              Acesso exclusivo para alunos, professores e responsáveis do Judoka Dojô.
-            </p>
-          </div>
+            {biometricSupported && hasBiometrics && (
+              <div className="pt-2">
+                <button 
+                  type="button"
+                  onClick={handleBiometricLogin}
+                  disabled={loading}
+                  className="w-full bg-indigo-50 border border-indigo-100 hover:bg-indigo-110 text-indigo-700 py-3.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                >
+                  <Fingerprint className="w-4 h-4" />
+                  Entrar com Biometria
+                </button>
+              </div>
+            )}
+          </form>
         </div>
       </motion.div>
+
+      <BiometricPrompt 
+        isOpen={showBiometricPrompt}
+        onClose={() => setShowBiometricPrompt(false)}
+        onSuccess={handleBiometricSuccess}
+        title="Validar Biometria"
+        subtitle="Posicione seu dedo no leitor biométrico ou sensor para acessar Judoka Dojô"
+      />
     </div>
   );
 }

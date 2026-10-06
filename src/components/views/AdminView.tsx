@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { db, doc } from '../../lib/firebase';
 import { collection, query, onSnapshot, getDocs, setDoc, updateDoc, deleteDoc, collectionGroup, orderBy } from 'firebase/firestore';
 import { Profile, UserRole, ClassSession, Payment, Settings, Schedule, Presence } from '../../types';
-import { Users, Calendar, Wallet, Plus, Trash2, CheckCircle, Clock, GraduationCap, Activity, Megaphone, Settings as SettingsIcon, ArrowRight } from 'lucide-react';
+import { Users, Calendar, Wallet, Plus, Trash2, CheckCircle, Clock, GraduationCap, Activity } from 'lucide-react';
 import { cn, formatDate } from '../../lib/utils';
 import MemberManagement from '../modules/MemberManagement';
 import FinanceManagement from '../modules/FinanceManagement';
@@ -13,9 +13,6 @@ import StudentAchievements from './StudentAchievements';
 import TodayClasses from '../modules/TodayClasses';
 import AnalyticsDashboard from '../modules/AnalyticsDashboard';
 import PresenceReport from '../modules/PresenceReport';
-import BirthdaysBoard from '../modules/BirthdaysBoard';
-import FamilyManagement from './FamilyManagement';
-import { FullPresenceHistory } from './StudentView';
 import { useAuth } from '../../AuthContext';
 
 export default function AdminView({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (t: string) => void }) {
@@ -35,25 +32,18 @@ export default function AdminView({ activeTab, setActiveTab }: { activeTab: stri
     if (!profileId || profileId === 'undefined') return;
 
     const unsubProfile = onSnapshot(doc(db, 'profiles', profileId), (doc) => {
-      if (doc.exists()) setProfile({ ...doc.data(), id: doc.id } as Profile);
+      if (doc.exists()) setProfile({ id: doc.id, ...doc.data() } as Profile);
     });
     const unsubProfiles = onSnapshot(collection(db, 'profiles'), (snapshot) => {
-      const seen = new Set<string>();
-      const list: Profile[] = [];
-      for (const doc of snapshot.docs) {
-        const item = { ...doc.data(), id: doc.id } as Profile;
-        if (!item.isPointer && !seen.has(item.id)) {
-          seen.add(item.id);
-          list.push(item);
-        }
-      }
-      setProfiles(list);
+      setProfiles(snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Profile))
+        .filter(p => !p.isPointer));
     }, (error) => {
       console.error("Profiles snapshot error:", error);
     });
 
     const unsubClasses = onSnapshot(collection(db, 'classes'), (snapshot) => {
-      setClasses(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ClassSession)));
+      setClasses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ClassSession)));
     }, (error) => {
       console.error("Classes snapshot error:", error);
     });
@@ -65,19 +55,19 @@ export default function AdminView({ activeTab, setActiveTab }: { activeTab: stri
     });
 
     const unsubPayments = onSnapshot(collection(db, 'payments'), (snapshot) => {
-      setPayments(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Payment)));
+      setPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment)));
     }, (error) => {
       console.error("Payments snapshot error:", error);
     });
 
     const unsubSchedules = onSnapshot(collection(db, 'schedule'), (snapshot) => {
-      setSchedules(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Schedule)));
+      setSchedules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Schedule)));
     });
 
     const unsubPresences = onSnapshot(
       collectionGroup(db, 'presences'),
       (snapshot) => {
-        const list = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Presence));
+        const list = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Presence));
         list.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
         setAllPresences(list);
       }
@@ -94,7 +84,7 @@ export default function AdminView({ activeTab, setActiveTab }: { activeTab: stri
     };
   }, [user]);
 
-  if (activeTab === 'home') return <AdminHome profiles={profiles} classes={classes} payments={payments} schedules={schedules} profile={profile} settings={settings} allPresences={allPresences} setActiveTab={setActiveTab} />;
+  if (activeTab === 'home') return <AdminHome profiles={profiles} classes={classes} payments={payments} schedules={schedules} profile={profile} settings={settings} />;
   if (activeTab === 'members') return <MemberManagement profiles={profiles} payments={payments} />;
   if (activeTab === 'finance') return <FinanceManagement profiles={profiles} payments={payments} settings={settings} />;
   if (activeTab === 'classes') return <ClassManagement classes={classes} profiles={profiles} />;
@@ -102,31 +92,11 @@ export default function AdminView({ activeTab, setActiveTab }: { activeTab: stri
   if (activeTab === 'ranking') return <StudentAchievements />;
   if (activeTab === 'reports') return <PresenceReport presences={allPresences} profiles={profiles} classes={classes} payments={payments} settings={settings} />;
   if (activeTab === 'settings') return <SettingsPanel settings={settings} />;
-  if (activeTab === 'history') return <FullPresenceHistory presences={allPresences} classes={classes} />;
-  if (activeTab === 'family') return <FamilyManagement />;
 
   return <div>Em breve: {activeTab}</div>;
 }
 
-function AdminHome({ 
-  profiles, 
-  classes, 
-  payments, 
-  schedules, 
-  profile, 
-  settings,
-  allPresences,
-  setActiveTab
-}: { 
-  profiles: Profile[], 
-  classes: ClassSession[], 
-  payments: Payment[], 
-  schedules: Schedule[], 
-  profile: Profile | null, 
-  settings: Settings | null,
-  allPresences: Presence[],
-  setActiveTab: (t: string) => void
-}) {
+function AdminHome({ profiles, classes, payments, schedules, profile, settings }: { profiles: Profile[], classes: ClassSession[], payments: Payment[], schedules: Schedule[], profile: Profile | null, settings: Settings | null }) {
   const pendingPayments = payments.filter(p => p.status === 'pending').length;
   
   const activeProfiles = profiles.filter(p => !p.status || p.status === 'active');
@@ -134,18 +104,8 @@ function AdminHome({
   const totalProfessors = activeProfiles.filter(p => p.role === UserRole.PROFESSOR).length;
   const totalAdmins = activeProfiles.filter(p => p.role === UserRole.ADMIN).length;
 
-  const todayDateStr = new Date().getFullYear() + '-' + 
-    String(new Date().getMonth() + 1).padStart(2, '0') + '-' + 
-    String(new Date().getDate()).padStart(2, '0');
-
-  const totalAllCheckIns = allPresences.length;
-  const todayCheckIns = allPresences.filter(p => 
-    (p.checkInDate && p.checkInDate === todayDateStr) || 
-    (p.timestamp && p.timestamp.startsWith(todayDateStr))
-  ).length;
-
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <header className="flex justify-between items-end flex-wrap gap-4">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-200 overflow-hidden shrink-0">
@@ -169,208 +129,7 @@ function AdminHome({
         </div>
       </header>
 
-      {/* Prominent Attendance & Dojo Metrics Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div 
-          onClick={() => setActiveTab('reports')}
-          className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total de Check-ins</span>
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Activity className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl font-black text-indigo-600 leading-none">{totalAllCheckIns}</span>
-              <span className="text-xs font-bold text-slate-500">presenças</span>
-            </div>
-            <p className="text-[11px] text-slate-400 font-medium mt-1">
-              Todos os check-ins dos usuários
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Presenças Hoje</span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <Clock className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl font-black text-emerald-600 leading-none">{todayCheckIns}</span>
-              <span className="text-xs font-bold text-slate-500">hoje</span>
-            </div>
-            <p className="text-[11px] text-slate-400 font-medium mt-1">
-              Alunos presentes no tatame
-            </p>
-          </div>
-        </div>
-
-        <div 
-          onClick={() => setActiveTab('members')}
-          className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total de Alunos</span>
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Users className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl font-black text-blue-600 leading-none">{totalStudents}</span>
-              <span className="text-xs font-bold text-slate-500">ativos</span>
-            </div>
-            <p className="text-[11px] text-slate-400 font-medium mt-1">
-              {totalProfessors} professores • {totalAdmins} admin
-            </p>
-          </div>
-        </div>
-
-        <div 
-          onClick={() => setActiveTab('finance')}
-          className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs hover:border-amber-400 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Mensalidades</span>
-            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Wallet className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl font-black text-amber-600 leading-none">{pendingPayments}</span>
-              <span className="text-xs font-bold text-slate-500">pendentes</span>
-            </div>
-            <p className="text-[11px] text-slate-400 font-medium mt-1">
-              Acompanhamento financeiro
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Immediate Check-in & Classes of Today */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-            <h3 className="font-extrabold text-base sm:text-lg text-slate-900 tracking-tight">
-              Aulas & Controle de Presença de Hoje
-            </h3>
-          </div>
-          <span className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer" onClick={() => setActiveTab('classes')}>
-            Ver grade completa →
-          </span>
-        </div>
-        <TodayClasses profile={profile} classes={classes} schedules={schedules} />
-      </div>
-
-      {/* Quick Navigation Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-        <button
-          type="button"
-          onClick={() => setActiveTab('members')}
-          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-indigo-300 active:bg-indigo-50/50 transition-colors text-left flex flex-col justify-between group touch-manipulation select-none cursor-pointer"
-        >
-          <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-2 pointer-events-none">
-            <Users className="w-4 h-4 pointer-events-none" />
-          </div>
-          <div className="pointer-events-none">
-            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-indigo-600 transition-colors pointer-events-none">Alunos</span>
-            <span className="text-[10px] text-slate-400 font-medium pointer-events-none">Gerenciar</span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('finance')}
-          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-indigo-300 active:bg-emerald-50/50 transition-colors text-left flex flex-col justify-between group touch-manipulation select-none cursor-pointer"
-        >
-          <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-2 pointer-events-none">
-            <Wallet className="w-4 h-4 pointer-events-none" />
-          </div>
-          <div className="pointer-events-none">
-            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-emerald-600 transition-colors pointer-events-none">Financeiro</span>
-            <span className="text-[10px] text-slate-400 font-medium pointer-events-none">Mensalidades</span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('classes')}
-          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-indigo-300 active:bg-blue-50/50 transition-colors text-left flex flex-col justify-between group touch-manipulation select-none cursor-pointer"
-        >
-          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-2 pointer-events-none">
-            <Calendar className="w-4 h-4 pointer-events-none" />
-          </div>
-          <div className="pointer-events-none">
-            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-blue-600 transition-colors pointer-events-none">Agenda</span>
-            <span className="text-[10px] text-slate-400 font-medium pointer-events-none">Aulas & Treinos</span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('reports')}
-          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-indigo-300 active:bg-violet-50/50 transition-colors text-left flex flex-col justify-between group touch-manipulation select-none cursor-pointer"
-        >
-          <div className="w-9 h-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center mb-2 pointer-events-none">
-            <Activity className="w-4 h-4 pointer-events-none" />
-          </div>
-          <div className="pointer-events-none">
-            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-violet-600 transition-colors pointer-events-none">Relatórios</span>
-            <span className="text-[10px] text-slate-400 font-medium pointer-events-none">Presenças & PDF</span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('graduation')}
-          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-indigo-300 active:bg-amber-50/50 transition-colors text-left flex flex-col justify-between group touch-manipulation select-none cursor-pointer"
-        >
-          <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-2 pointer-events-none">
-            <GraduationCap className="w-4 h-4 pointer-events-none" />
-          </div>
-          <div className="pointer-events-none">
-            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-amber-600 transition-colors pointer-events-none">Graduação</span>
-            <span className="text-[10px] text-slate-400 font-medium pointer-events-none">Exame Faixa</span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('events')}
-          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-indigo-300 active:bg-pink-50/50 transition-colors text-left flex flex-col justify-between group touch-manipulation select-none cursor-pointer"
-        >
-          <div className="w-9 h-9 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center mb-2 pointer-events-none">
-            <Megaphone className="w-4 h-4 pointer-events-none" />
-          </div>
-          <div className="pointer-events-none">
-            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-pink-600 transition-colors pointer-events-none">Eventos</span>
-            <span className="text-[10px] text-slate-400 font-medium pointer-events-none">Mural do Dojô</span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('settings')}
-          className="p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-indigo-300 active:bg-slate-100 transition-colors text-left flex flex-col justify-between group touch-manipulation select-none cursor-pointer"
-        >
-          <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center mb-2 pointer-events-none">
-            <SettingsIcon className="w-4 h-4 pointer-events-none" />
-          </div>
-          <div className="pointer-events-none">
-            <span className="font-extrabold text-xs text-slate-900 block group-hover:text-slate-900 transition-colors pointer-events-none">Ajustes</span>
-            <span className="text-[10px] text-slate-400 font-medium pointer-events-none">Configurações</span>
-          </div>
-        </button>
-      </div>
-
-      <BirthdaysBoard profiles={profiles} />
+      <TodayClasses profile={profile} classes={classes} schedules={schedules} />
 
       <div className="space-y-6">
         <div className="flex items-center gap-2 mb-2">

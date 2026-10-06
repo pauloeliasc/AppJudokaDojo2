@@ -1,7 +1,6 @@
 export enum UserRole {
   ADMIN = 'admin',
   PROFESSOR = 'professor',
-  ASSISTANT = 'assistant',
   STUDENT = 'student'
 }
 
@@ -44,17 +43,9 @@ export interface Profile {
   responsibleEmail?: string; // Email of the parent/guardian
   responsibleId?: string; // ID of the responsible profile for this student
   callNumber?: string; // Student roll call number
-  matriculaNumber?: string; // Digital badge matricula code (e.g., JUDO-042)
   isStudent?: boolean; // Responsible profile can also be a student too
   isPointer?: boolean; // Indicates if this profile is just a pointer reference
   isPrivateProfile?: boolean; // Matches user requested privacy setting
-  gokyoProgress?: Record<string, {
-    status: 'learning' | 'mastered' | 'verified';
-    verifiedBy?: string;
-    verifiedAt?: string;
-    notes?: string;
-    updatedAt?: string;
-  }>;
 }
 
 export enum ClassType {

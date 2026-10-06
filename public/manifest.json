@@ -1,42 +1,28 @@
 {
-  "id": "/",
-  "name": "Judoka Dojô - Gestão de Academia",
+  "name": "Judoka Dojô",
   "short_name": "Judoka Dojô",
-  "description": "Aplicativo oficial de gestão e acompanhamento de alunos e treinos da escola Judoka Dojô",
-  "start_url": "/",
-  "scope": "/",
+  "description": "Aplicativo de gestão e acompanhamento de alunos da escola Judoka Dojô",
+  "start_url": "./",
   "display": "standalone",
-  "display_override": ["standalone", "window-controls-overlay", "minimal-ui"],
-  "orientation": "portrait-primary",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
-  "lang": "pt-BR",
-  "categories": ["sports", "education", "fitness"],
-  "prefer_related_applications": false,
+  "orientation": "portrait",
   "icons": [
     {
-      "src": "/pwa-192x192.png",
+      "src": "./pwa-192x192.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
+      "type": "image/png"
     },
     {
-      "src": "/pwa-512x512.png",
+      "src": "./pwa-512x512.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
+      "type": "image/png"
     },
     {
-      "src": "/pwa-512x512.png",
+      "src": "./logo.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/logo.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ]
 }

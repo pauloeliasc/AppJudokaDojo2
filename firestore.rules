@@ -19,36 +19,22 @@ service cloud.firestore {
       return isSignedIn() && (
         (request.auth.token.email != null && (
           request.auth.token.email.lower() == 'pauloeliasc@gmail.com' || 
-          request.auth.token.email.lower() == 'pauloeliasc@hotmail.com' ||
-          request.auth.token.email.lower() == 'judokadojoosasco@gmail.com' ||
-          request.auth.token.email.lower() == 'admin@judokadojo.com'
+          request.auth.token.email.lower() == 'judokadojoosasco@gmail.com'
         )) ||
         (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('role', '') in ['admin', 'administrador', 'ADMIN', 'Administrador']) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['admin', 'administrador', 'ADMIN', 'Administrador'])
+         get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('role', '') == 'admin')
       );
     }
 
     function isProfessor() {
       return isSignedIn() && (
-        isAdmin() ||
-        (request.auth.token.email != null && request.auth.token.email.lower() == 'sensei@judokadojo.com') ||
+        (request.auth.token.email != null && (
+          request.auth.token.email.lower() == 'pauloeliasc@gmail.com' || 
+          request.auth.token.email.lower() == 'judokadojoosasco@gmail.com'
+         )) ||
         (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) && 
-         (get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('role', '') in ['professor', 'sensei', 'instrutor', 'PROFESSOR', 'admin', 'administrador'])) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['professor', 'sensei', 'instrutor', 'PROFESSOR', 'admin', 'administrador']))
-      );
-    }
-
-    function isAssistant() {
-      return isSignedIn() && (
-        isProfessor() ||
-        (request.auth.token.email != null && request.auth.token.email.lower() == 'ajudante@judokadojo.com') ||
-        (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) && 
-         (get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('role', '') in ['assistant', 'ajudante', 'monitor', 'ASSISTANT', 'professor', 'sensei', 'admin'])) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['assistant', 'ajudante', 'monitor', 'ASSISTANT', 'professor', 'sensei', 'admin']))
+         (get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('role', '') == 'professor' || 
+          get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.get('role', '') == 'admin'))
       );
     }
 
@@ -95,13 +81,13 @@ service cloud.firestore {
 
     function isValidUser(data) {
       return data.keys().hasAll(['role']) &&
-             data.role in ['admin', 'professor', 'assistant', 'student', 'administrador', 'aluno', 'ajudante', 'sensei'];
+             data.role in ['admin', 'professor', 'student'];
     }
 
     function isValidProfile(data) {
       return data.keys().hasAll(['fullName', 'role']) &&
              data.fullName is string && data.fullName.size() <= 200 &&
-             data.role in ['admin', 'professor', 'assistant', 'student', 'administrador', 'aluno', 'ajudante', 'sensei'];
+             data.role in ['admin', 'professor', 'student'];
     }
 
     function isValidClass(data) {
@@ -156,7 +142,8 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create, update: if isSignedIn() && (isAdmin() || isProfessor() || isOwner(userId)) && isValidUser(incoming());
+      allow create: if isAdmin() && isValidUser(incoming());
+      allow update: if (isAdmin() || isOwner(userId)) && isValidUser(incoming());
     }
 
     match /auth_resets/{email} {
@@ -167,22 +154,22 @@ service cloud.firestore {
     match /profiles/{profileId} {
       allow get: if isSignedIn();
       allow list: if isSignedIn();
-      allow create, update: if isSignedIn() && (isMyProfile(profileId) || isProfessor() || isAssistant() || (request.auth.token.email != null && incoming().get('email', '') == request.auth.token.email));
+      allow create, update: if isSignedIn() && (isMyProfile(profileId) || isProfessor() || (request.auth.token.email != null && incoming().get('email', '') == request.auth.token.email));
       allow delete: if isAdmin();
     }
 
     match /classes/{classId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidClass(incoming());
-      allow update: if (isProfessor() || isAssistant()) && isValidClass(incoming());
+      allow update: if isProfessor() && isValidClass(incoming());
       allow delete: if isProfessor() || isAdmin();
     }
 
     match /{path=**}/presences/{presenceId} {
       allow list: if isSignedIn();
       allow get: if isSignedIn();
-      allow create, update: if (isProfessor() || isAssistant() || isMyProfile(incoming().memberId)) && isValidPresence(incoming());
-      allow delete: if isProfessor() || isAssistant() || isMyProfile(presenceId) || (resource != null && isMyProfile(resource.data.get('memberId', '')));
+      allow create, update: if (isProfessor() || isMyProfile(incoming().memberId)) && isValidPresence(incoming());
+      allow delete: if isProfessor() || isMyProfile(presenceId) || (resource != null && isMyProfile(resource.data.get('memberId', '')));
     }
 
     match /payments/{paymentId} {

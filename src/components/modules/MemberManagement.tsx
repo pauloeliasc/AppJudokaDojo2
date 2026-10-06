@@ -1,16 +1,15 @@
 import React, { useState } from 'react';
 import { Profile, UserRole, Payment } from '../../types';
-import { db, auth, handleFirestoreError, OperationType, doc } from '../../lib/firebase';
+import { db, handleFirestoreError, OperationType, doc } from '../../lib/firebase';
 import { deleteDoc, collection, addDoc, query, where, getDocs, setDoc } from 'firebase/firestore';
-import { Plus, Search, UserPlus, Trash2, Edit2, ShieldAlert, Users, LayoutDashboard, CreditCard, CheckCircle2, XCircle, RefreshCw, AlertTriangle, UserCheck, ShieldCheck, UserX, Trash, Key, FileDown, Printer, AlertOctagon, Ban, Check, QrCode } from 'lucide-react';
+import { Plus, Search, UserPlus, Trash2, Edit2, ShieldAlert, Users, LayoutDashboard, CreditCard, CheckCircle2, XCircle, RefreshCw, AlertTriangle, UserCheck, ShieldCheck, UserX, Trash, Key, FileDown, Printer, AlertOctagon, Ban, Check } from 'lucide-react';
 import { cn, formatDate } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { profilesApi, paymentsApi } from '../../services/firestoreService';
 import MemberDetailsModal from './MemberDetailsModal';
 import FirebaseSyncModal from './FirebaseSyncModal';
-import StudentDigitalCardModal from './StudentDigitalCardModal';
 
-export default function MemberManagement({ profiles, payments = [], initialAdding = false }: { profiles: Profile[], payments?: Payment[], initialAdding?: boolean }) {
+export default function MemberManagement({ profiles, payments = [] }: { profiles: Profile[], payments?: Payment[] }) {
   const { user: currentUser } = useAuth();
   const emailCounts: Record<string, number> = {};
   profiles.forEach(p => {
@@ -20,17 +19,14 @@ export default function MemberManagement({ profiles, payments = [], initialAddin
     }
   });
   const isAdminUser = currentUser?.role === UserRole.ADMIN;
-  const isAssistantUser = currentUser?.role === UserRole.ASSISTANT;
   const isAdminOrProfessor = isAdminUser || currentUser?.role === UserRole.PROFESSOR;
-  const canAddStudent = isAdminUser || currentUser?.role === UserRole.PROFESSOR || isAssistantUser;
 
-  const [isAdding, setIsAdding] = useState(initialAdding);
+  const [isAdding, setIsAdding] = useState(false);
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const [viewingDetails, setViewingDetails] = useState<Profile | null>(null);
-  const [viewingDigitalCard, setViewingDigitalCard] = useState<Profile | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [view, setView] = useState<'active' | 'pending' | 'inactive'>('active');
-  const [roleFilter, setRoleFilter] = useState<'all' | 'student' | 'assistant' | 'professor' | 'admin'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'student' | 'professor' | 'admin'>('all');
   const [showSyncModal, setShowSyncModal] = useState(false);
 
   const activeProfiles = profiles.filter(p => !p.status || p.status === 'active');
@@ -42,7 +38,6 @@ export default function MemberManagement({ profiles, payments = [], initialAddin
     .filter(p => {
       if (roleFilter === 'all') return true;
       if (roleFilter === 'student') return !p.role || p.role === UserRole.STUDENT;
-      if (roleFilter === 'assistant') return p.role === UserRole.ASSISTANT;
       if (roleFilter === 'professor') return p.role === UserRole.PROFESSOR;
       if (roleFilter === 'admin') return p.role === UserRole.ADMIN;
       return true;
@@ -53,7 +48,7 @@ export default function MemberManagement({ profiles, payments = [], initialAddin
     const rows = filtered.map(p => [
       p.fullName || '',
       p.email || '',
-      p.role === 'admin' ? 'Administrador' : p.role === 'professor' ? 'Professor' : p.role === 'assistant' ? 'Ajudante' : 'Aluno',
+      p.role === 'admin' ? 'Administrador' : p.role === 'professor' ? 'Professor' : 'Aluno',
       p.currentGrade || 'Branca',
       p.status || 'Ativo',
       p.birthDate || '',
@@ -282,7 +277,6 @@ export default function MemberManagement({ profiles, payments = [], initialAddin
           {[
             { id: 'all', label: 'Todos os Membros' },
             { id: 'student', label: 'Alunos' },
-            { id: 'assistant', label: 'Ajudantes' },
             { id: 'professor', label: 'Professores' },
             { id: 'admin', label: 'Administradores' }
           ].map(roleItem => {
@@ -292,7 +286,6 @@ export default function MemberManagement({ profiles, payments = [], initialAddin
             
             if (roleItem.id === 'all') count = filteredBySearch.length;
             else if (roleItem.id === 'student') count = filteredBySearch.filter(p => !p.role || p.role === UserRole.STUDENT).length;
-            else if (roleItem.id === 'assistant') count = filteredBySearch.filter(p => p.role === UserRole.ASSISTANT).length;
             else if (roleItem.id === 'professor') count = filteredBySearch.filter(p => p.role === UserRole.PROFESSOR).length;
             else if (roleItem.id === 'admin') count = filteredBySearch.filter(p => p.role === UserRole.ADMIN).length;
 
@@ -348,7 +341,6 @@ export default function MemberManagement({ profiles, payments = [], initialAddin
               payments={payments.filter(p => p.memberId === profile.id)}
               onEdit={() => setEditingProfile(profile)} 
               onViewDetails={() => setViewingDetails(profile)}
-              onViewDigitalCard={() => setViewingDigitalCard(profile)}
               emailCounts={emailCounts}
             />
           ))}
@@ -379,12 +371,6 @@ export default function MemberManagement({ profiles, payments = [], initialAddin
             onClose={() => setViewingDetails(null)} 
           />
         )}
-        {viewingDigitalCard && (
-          <StudentDigitalCardModal 
-            profile={viewingDigitalCard} 
-            onClose={() => setViewingDigitalCard(null)} 
-          />
-        )}
         {showSyncModal && (
           <FirebaseSyncModal 
             profiles={profiles}
@@ -399,7 +385,7 @@ export default function MemberManagement({ profiles, payments = [], initialAddin
 import { createStudentAccount, deleteStudentAccount, updateStudentEmail, resetStudentPassword, sendStudentPasswordReset } from '../../services/adminService';
 import { Mail, CheckCircle, Loader2 } from 'lucide-react';
 
-function MemberCard({ profile, payments, onEdit, onViewDetails, onViewDigitalCard, emailCounts }: { profile: Profile, payments: Payment[], onEdit: () => void, onViewDetails: () => void, onViewDigitalCard?: () => void, emailCounts?: Record<string, number>, key?: string }) {
+function MemberCard({ profile, payments, onEdit, onViewDetails, emailCounts }: { profile: Profile, payments: Payment[], onEdit: () => void, onViewDetails: () => void, emailCounts?: Record<string, number>, key?: string }) {
   const { user: currentUser } = useAuth();
   const isAdminUser = currentUser?.role === UserRole.ADMIN;
   const isAdminOrProfessor = isAdminUser || currentUser?.role === UserRole.PROFESSOR;
@@ -718,7 +704,7 @@ function MemberCard({ profile, payments, onEdit, onViewDetails, onViewDigitalCar
           <CheckCircle2 className="w-10 h-10 text-indigo-400 mb-3" />
           <h5 className="font-bold text-sm uppercase tracking-wider mb-1 text-white">Aprovar Cadastro?</h5>
           <p className="text-xs text-slate-300 max-w-[240px] mb-4">
-            Confirmar aprovação de <strong>{profile.fullName}</strong> para perfil ativo de {confirmApprove === UserRole.STUDENT ? 'Aluno' : confirmApprove === UserRole.ASSISTANT ? 'Ajudante' : 'Professor'}?
+            Confirmar aprovação de <strong>{profile.fullName}</strong> para perfil ativo de {confirmApprove === UserRole.STUDENT ? 'Aluno' : 'Professor'}?
           </p>
           <div className="flex gap-2 w-full max-w-[220px]">
             <button 
@@ -803,16 +789,8 @@ function MemberCard({ profile, payments, onEdit, onViewDetails, onViewDigitalCar
                   Responsável/Família ({emailCounts[profile.email.trim().toLowerCase()]} Alunos)
                 </span>
               ) : (
-                <span className={cn(
-                  "text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border",
-                  profile.role === UserRole.ADMIN ? "bg-purple-50 text-purple-700 border-purple-200 font-black" :
-                  profile.role === UserRole.PROFESSOR ? "bg-blue-50 text-blue-700 border-blue-200 font-bold" :
-                  profile.role === UserRole.ASSISTANT ? "bg-amber-50 text-amber-900 border-amber-300 font-black flex items-center gap-1" :
-                  "bg-slate-100 text-slate-600 border-slate-200"
-                )}>
-                  {profile.role === UserRole.ADMIN ? 'Administrador' :
-                   profile.role === UserRole.PROFESSOR ? 'Professor' :
-                   profile.role === UserRole.ASSISTANT ? '🥋 Ajudante' : 'Aluno'}
+                <span className="text-[10px] uppercase font-bold tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200">
+                  {profile.role || 'student'}
                 </span>
               )}
               {profile.userId && profile.status === 'active' && (
@@ -882,15 +860,6 @@ function MemberCard({ profile, payments, onEdit, onViewDetails, onViewDigitalCar
               {accountStatus === 'loading' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
             </button>
           )}
-          {onViewDigitalCard && (
-            <button 
-              onClick={onViewDigitalCard} 
-              title="Carteirinha Digital & QR Code de Presença"
-              className="p-2 hover:bg-amber-50 rounded-lg transition-colors text-slate-400 hover:text-amber-600 cursor-pointer"
-            >
-              <QrCode className="w-4 h-4 text-amber-500" />
-            </button>
-          )}
           <button 
             onClick={onViewDetails} 
             title="Ver Detalhes e Estatísticas"
@@ -915,22 +884,16 @@ function MemberCard({ profile, payments, onEdit, onViewDetails, onViewDigitalCar
       </div>
 
       {profile.status === 'pending' ? (
-        <div className="mt-6 flex gap-2 flex-wrap sm:flex-nowrap">
+        <div className="mt-6 flex gap-3">
           <button 
             onClick={() => setConfirmApprove(UserRole.STUDENT)}
-            className="flex-1 bg-emerald-500 text-white py-2 rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-colors shadow-sm cursor-pointer text-center"
+            className="flex-1 bg-emerald-500 text-white py-2 rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-colors shadow-sm cursor-pointer"
           >
             Aprovar Aluno
           </button>
           <button 
-            onClick={() => setConfirmApprove(UserRole.ASSISTANT)}
-            className="flex-1 bg-amber-500 text-slate-950 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-amber-600 transition-colors shadow-sm cursor-pointer text-center"
-          >
-            Aprovar Ajudante
-          </button>
-          <button 
             onClick={() => setConfirmApprove(UserRole.PROFESSOR)}
-            className="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition-colors shadow-sm cursor-pointer text-center"
+            className="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition-colors shadow-sm cursor-pointer"
           >
             Aprovar Prof
           </button>
@@ -1065,61 +1028,15 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
   const performSubmit = async () => {
     setLoading(true);
     try {
-      // 1. Ensure assistant role is synchronized in Firestore if currentUser is assistant
-      if (currentUser?.role === UserRole.ASSISTANT && auth.currentUser) {
-        try {
-          await setDoc(doc(db, 'profiles', auth.currentUser.uid), {
-            id: auth.currentUser.uid,
-            userId: auth.currentUser.uid,
-            role: 'assistant',
-            updatedAt: new Date().toISOString()
-          }, { merge: true });
-          await setDoc(doc(db, 'users', auth.currentUser.uid), {
-            role: 'assistant'
-          }, { merge: true });
-        } catch (authSyncErr) {
-          console.warn("Silent note: assistant sync before submit:", authSyncErr);
-        }
-      }
-
-      const cleanFullName = (formData.fullName || '').trim();
-      if (!cleanFullName) {
-        setModalAlert({ text: 'Por favor, informe o Nome Completo do aluno.', type: 'error' });
-        setLoading(false);
-        return;
-      }
-
       const normalizedEmail = formData.email ? formData.email.trim().toLowerCase() : '';
 
-      const submissionData: any = { 
-        ...formData, 
-        fullName: cleanFullName,
-        email: normalizedEmail 
-      };
+      const submissionData = { ...formData, email: normalizedEmail };
+      if (!submissionData.email) delete (submissionData as any).email;
+      if (!submissionData.responsibleId) delete (submissionData as any).responsibleId;
+      if (!submissionData.callNumber) delete (submissionData as any).callNumber;
+      delete (submissionData as any).isStudent;
 
-      if (!submissionData.email) delete submissionData.email;
-      if (!submissionData.responsibleId) delete submissionData.responsibleId;
-      if (!submissionData.callNumber) delete submissionData.callNumber;
-      delete submissionData.isStudent;
-
-      // Clean empty string optional fields to keep document pristine
-      ['responsibleName', 'responsiblePhone', 'responsibleEmail', 'medications', 'healthInsurance', 'bloodType', 'conditions', 'phoneNumber', 'address', 'lastPromotionDate', 'suspensionReason'].forEach(key => {
-        if (typeof submissionData[key] === 'string' && !submissionData[key].trim()) {
-          delete submissionData[key];
-        }
-      });
-
-      // Role enforcement: assistant only adds students
-      if (!submissionData.role || currentUser?.role === UserRole.ASSISTANT) {
-        submissionData.role = UserRole.STUDENT;
-      }
-
-      if (!submissionData.status) {
-        submissionData.status = 'active';
-        submissionData.isApproved = true;
-      }
-
-      // Check if existing student in database already uses this email for shared family login
+      // Look up if any other student in the database is using this email and already has a userId
       let existingUserId: string | null = null;
       if (normalizedEmail) {
         try {
@@ -1205,13 +1122,9 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
             }
           }
         } else {
-          // Direct profile update
+          // No email change or direct update
           await profilesApi.update(profile.id, submissionData);
-          setModalAlert({
-            text: 'Dados do aluno atualizados com sucesso!',
-            type: 'success',
-            onClose: () => onClose()
-          });
+          onClose();
           return;
         }
         await profilesApi.update(profile.id, submissionData);
@@ -1221,17 +1134,15 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
           submissionData.userId = existingUserId;
         }
 
-        submissionData.createdBy = currentUser?.id || currentUser?.uid || auth.currentUser?.uid || '';
-        submissionData.createdByName = currentUser?.name || 'Ajudante';
-        submissionData.addedByRole = currentUser?.role || 'assistant';
-        submissionData.createdAt = new Date().toISOString();
-
-        const docRef = await addDoc(collection(db, 'profiles'), submissionData);
+        const docRef = await addDoc(collection(db, 'profiles'), {
+          ...submissionData,
+          createdAt: new Date().toISOString()
+        });
 
         if (normalizedEmail) {
           if (existingUserId) {
             setModalAlert({
-              text: 'Aluno cadastrado e vinculado com sucesso ao login familiar existente!',
+              text: 'Membro cadastrado e vinculado com sucesso ao login familiar existente!',
               type: 'success',
               onClose: () => onClose()
             });
@@ -1239,39 +1150,25 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
             try {
               await createStudentAccount(normalizedEmail, docRef.id);
               setModalAlert({
-                text: 'Aluno cadastrado com sucesso! Conta de login criada com a senha padrão "123456".',
+                text: 'Membro cadastrado com sucesso e conta de login ativa com a senha padrão "123456"!',
                 type: 'success',
                 onClose: () => onClose()
               });
             } catch (accountError: any) {
               console.error("Error creating student account automatically:", accountError);
               setModalAlert({ 
-                text: `Aluno cadastrado com sucesso no sistema! Observação de login: ${accountError.message || 'O login poderá ser ativado pelo Sensei posteriormente.'}`, 
+                text: `Membro cadastrado com sucesso, mas houve uma observação de login: ${accountError.message || 'Erro desconhecido'}`, 
                 type: 'success',
                 onClose: () => onClose()
               });
             }
           }
         } else {
-          setModalAlert({
-            text: 'Aluno cadastrado com sucesso no Dojô!',
-            type: 'success',
-            onClose: () => onClose()
-          });
+          onClose();
         }
       }
     } catch (e: any) {
-      console.error("Error saving member profile:", e);
-      let errorMsg = 'Não foi possível salvar o cadastro do aluno no sistema.';
-      if (e.message?.includes('permission') || e.message?.includes('Missing or insufficient permissions')) {
-        errorMsg = 'Erro de permissão no Firebase. As credenciais do seu usuário foram revalidadas no banco de dados. Por favor, tente clicar em "Salvar Cadastro" novamente.';
-      } else if (e.message) {
-        errorMsg = `Erro ao salvar: ${e.message}`;
-      }
-      setModalAlert({
-        text: errorMsg,
-        type: 'error'
-      });
+      handleFirestoreError(e, profile ? OperationType.UPDATE : OperationType.CREATE, 'profiles');
     } finally {
       setLoading(false);
     }
@@ -1280,11 +1177,6 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
-
-    if (!formData.fullName.trim()) {
-      setModalAlert({ text: 'Por favor, informe o Nome Completo do aluno.', type: 'error' });
-      return;
-    }
 
     const normalizedEmail = formData.email ? formData.email.trim().toLowerCase() : '';
     if (normalizedEmail && (!profile?.email || profile.email.toLowerCase() !== normalizedEmail)) {
@@ -1306,16 +1198,30 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
 
   const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
     const target = e.target as HTMLElement;
-    if (target.tagName === 'TEXTAREA') return;
+    
+    // Ignore key intercepts in textareas for normal carriage returns and up/down text caret styling
+    if (target.tagName === 'TEXTAREA') {
+      return;
+    }
 
     const isInput = target.tagName === 'INPUT';
     const isSelect = target.tagName === 'SELECT';
+
     if (!isInput && !isSelect) return;
 
-    // Only intercept Arrow navigation so Enter key on mobile and desktop submits naturally
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    const key = e.key;
+
+    // Standard arrow up/down on input elements, or ENTER key to move to next input/select
+    const isArrowDown = key === 'ArrowDown' && isInput;
+    const isArrowUp = key === 'ArrowUp' && isInput;
+    const isEnter = key === 'Enter';
+
+    if (isArrowDown || isArrowUp || isEnter) {
+      // Prevent default form submissions and list/dropdown scrollings which could trigger form events unexpectedly
       e.preventDefault();
+
       const form = e.currentTarget;
+      // Gather all navigable form fields excluding standard hidden autofill blocks
       const focusableElements = Array.from(
         form.querySelectorAll('input:not([tabindex="-1"]), select, textarea, button[type="submit"]')
       ).filter((el: any) => {
@@ -1325,12 +1231,19 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
 
       const index = focusableElements.indexOf(target);
       if (index > -1) {
-        const nextIndex = e.key === 'ArrowDown'
-          ? (index + 1) % focusableElements.length
-          : (index - 1 + focusableElements.length) % focusableElements.length;
+        let nextIndex = index;
+        if (isArrowDown || isEnter) {
+          nextIndex = (index + 1) % focusableElements.length;
+        } else if (isArrowUp) {
+          nextIndex = (index - 1 + focusableElements.length) % focusableElements.length;
+        }
+        
         const nextElement = focusableElements[nextIndex] as any;
         if (nextElement) {
           nextElement.focus();
+          if (nextElement instanceof HTMLInputElement && (nextElement.type === 'text' || nextElement.type === 'email')) {
+            nextElement.select();
+          }
         }
       }
     }
@@ -1381,331 +1294,316 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="flex flex-col flex-1 overflow-hidden" autoComplete="off">
+        <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1" autoComplete="off">
           {/* Evitar preenchimento automático invasivo do Google Chrome */}
           <div style={{ display: 'none' }}>
             <input type="text" name="chrome_prevent_email_autofill" tabIndex={-1} autoComplete="off" />
             <input type="password" name="chrome_prevent_password_autofill" tabIndex={-1} autoComplete="off" />
           </div>
 
-          <div className="p-5 sm:p-8 space-y-6 overflow-y-auto flex-1">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="md:col-span-2">
-                <label htmlFor="fullName" className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Nome Completo *</label>
-                <input 
-                  required
-                  type="text"
-                  id="fullName"
-                  name="fullName"
-                  autoComplete="new-name"
-                  placeholder="Ex: João da Silva"
-                  className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-base transition-all text-slate-900 font-medium"
-                  value={formData.fullName}
-                  onChange={e => setFormData({...formData, fullName: e.target.value})}
-                />
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="md:col-span-2">
+              <label htmlFor="fullName" className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Nome Completo</label>
+              <input 
+                required
+                type="text"
+                id="fullName"
+                name="fullName"
+                autoComplete="new-name"
+                placeholder="Ex Nome: João Silva"
+                className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium"
+                value={formData.fullName}
+                onChange={e => setFormData({...formData, fullName: e.target.value})}
+              />
+            </div>
 
-              <div className="md:col-span-2">
-                <label htmlFor="email" className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">E-mail (Login/Notificações)</label>
-                <input 
-                  type="email"
-                  id="email"
-                  name="email"
-                  autoComplete="new-email"
-                  placeholder="email@exemplo.com"
-                  className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-base transition-all text-slate-900 font-medium"
-                  value={formData.email}
-                  onChange={e => setFormData({...formData, email: e.target.value})}
-                />
-                <p className="text-[8px] text-slate-400 mt-1 ml-1 italic">Opcional para crianças ou alunos sob responsabilidade.</p>
-              </div>
+            <div className="md:col-span-2">
+              <label htmlFor="email" className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">E-mail (Login/Notificações)</label>
+              <input 
+                type="email"
+                id="email"
+                name="email"
+                autoComplete="new-email"
+                placeholder="email@exemplo.com"
+                className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium"
+                value={formData.email}
+                onChange={e => setFormData({...formData, email: e.target.value})}
+              />
+              <p className="text-[8px] text-slate-400 mt-1 ml-1 italic">Opcional para alunos sob responsabilidade.</p>
+            </div>
 
-              <div>
-                <label htmlFor="phoneNumber" className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Telefone / WhatsApp</label>
-                <input 
-                  type="text"
-                  id="phoneNumber"
-                  name="phoneNumber"
-                  placeholder="(00) 00000-0000"
-                  className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-base transition-all text-slate-900 font-medium"
-                  value={formData.phoneNumber}
-                  onChange={e => setFormData({...formData, phoneNumber: e.target.value})}
-                />
-              </div>
+            <div>
+              <label htmlFor="phoneNumber" className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Telefone / Celular</label>
+              <input 
+                type="text"
+                id="phoneNumber"
+                name="phoneNumber"
+                placeholder="(00) 00000-0000"
+                className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium"
+                value={formData.phoneNumber}
+                onChange={e => setFormData({...formData, phoneNumber: e.target.value})}
+              />
+            </div>
 
-              <div className="md:col-span-2">
-                <label htmlFor="address" className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Endereço</label>
-                <input 
-                  type="text"
-                  id="address"
-                  name="address"
-                  placeholder="Rua, Número, Bairro, Cidade - Estado"
-                  className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-base transition-all text-slate-900 font-medium"
-                  value={formData.address}
-                  onChange={e => setFormData({...formData, address: e.target.value})}
-                />
-              </div>
+            <div className="md:col-span-2">
+              <label htmlFor="address" className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Endereço</label>
+              <input 
+                type="text"
+                id="address"
+                name="address"
+                placeholder="Rua, Número, Bairro, Cidade - Estado"
+                className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium"
+                value={formData.address}
+                onChange={e => setFormData({...formData, address: e.target.value})}
+              />
+            </div>
 
-              {profile && profile.email && isAdminUser && (
-                <div className="md:col-span-2 bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Credenciais e Segurança de Login</h4>
-                      <p className="text-[10px] text-slate-400 font-semibold">Gerencie as opções de login e senha do aluno.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowPwdField(!showPwdField)}
-                      className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
-                    >
-                      {showPwdField ? 'Ocultar Campo de Senha' : 'Já alterou a senha padrão?'}
-                    </button>
+            {profile && profile.email && isAdminUser && (
+              <div className="md:col-span-2 bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Credenciais e Segurança de Login</h4>
+                    <p className="text-[10px] text-slate-400 font-semibold">Gerencie as opções de login e senha do aluno.</p>
                   </div>
-
-                  {showPwdField && (
-                    <div className="space-y-1.5 bg-white p-3 rounded-xl border border-slate-100">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Senha de Login Atual do Aluno</label>
-                      <input 
-                        type="text"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 outline-none text-xs text-slate-800 font-mono"
-                        placeholder="Deixe em branco se ainda for a padrão '123456'"
-                        value={customCurrentPassword}
-                        onChange={e => setCustomCurrentPassword(e.target.value)}
-                      />
-                      <p className="text-[9px] text-slate-400 leading-relaxed font-semibold">
-                        Nota: Se o aluno mudou a senha padrão dele, precisamos da senha atual para autorizar a alteração do e-mail de login ou redefinição da senha diretamente pelo applet cliente do Firebase.
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmResetPassword(true)}
-                      disabled={isResettingPassword || isSendingResetEmail}
-                      className="flex-1 min-w-[200px] bg-slate-800 text-white rounded-xl py-2.5 px-4 text-xs font-bold hover:bg-slate-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 cursor-pointer"
-                    >
-                      {isResettingPassword && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                      <span>Redefinir Senha para Padrão (123456)</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleSendResetEmail}
-                      disabled={isResettingPassword || isSendingResetEmail}
-                      className="flex-1 min-w-[200px] bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl py-2.5 px-4 text-xs font-bold hover:bg-indigo-100 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 cursor-pointer"
-                    >
-                      {isSendingResetEmail && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                      <span>Enviar Link de Redefinição por E-mail</span>
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPwdField(!showPwdField)}
+                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                  >
+                    {showPwdField ? 'Ocultar Campo de Senha' : 'Já alterou a senha padrão?'}
+                  </button>
                 </div>
-              )}
 
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Data de Nascimento</label>
-                <input 
-                  type="date"
-                  className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-base transition-all text-slate-900 font-medium"
-                  value={formData.birthDate}
-                  onChange={e => setFormData({...formData, birthDate: e.target.value})}
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Data de Matrícula</label>
-                <input 
-                  type="date"
-                  className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-base transition-all text-slate-900 font-medium"
-                  value={formData.enrollmentDate}
-                  onChange={e => setFormData({...formData, enrollmentDate: e.target.value})}
-                />
-              </div>
-
-              {(formData.role === UserRole.STUDENT || formData.role === UserRole.ASSISTANT) && (
-                <>
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Última Graduação</label>
-                    <select 
-                      className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-base transition-all text-slate-900 font-medium appearance-none"
-                      value={formData.currentGrade}
-                      onChange={e => setFormData({...formData, currentGrade: e.target.value})}
-                    >
-                      {['Branca', 'Cinza', 'Cinza ponta azul', 'Azul', 'Azul ponta amarela', 'Amarela', 'Amarela ponta laranja', 'Laranja', 'Verde', 'Roxa', 'Marrom', 'Preta'].map(g => (
-                        <option key={g} value={g}>{g}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Data da Última Graduação</label>
+                {showPwdField && (
+                  <div className="space-y-1.5 bg-white p-3 rounded-xl border border-slate-100">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Senha de Login Atual do Aluno</label>
                     <input 
-                      type="date"
-                      className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-base transition-all text-slate-900 font-medium"
-                      value={formData.lastPromotionDate}
-                      onChange={e => setFormData({...formData, lastPromotionDate: e.target.value})}
+                      type="text"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 outline-none text-xs text-slate-800 font-mono"
+                      placeholder="Deixe em branco se ainda for a padrão '123456'"
+                      value={customCurrentPassword}
+                      onChange={e => setCustomCurrentPassword(e.target.value)}
                     />
-                  </div>
-                </>
-              )}
-
-              {isAdminUser ? (
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Função / Perfil</label>
-                  <select 
-                    className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-base transition-all text-slate-900 font-medium appearance-none"
-                    value={formData.role}
-                    onChange={e => setFormData({...formData, role: e.target.value as UserRole})}
-                  >
-                    <option value={UserRole.STUDENT}>Aluno</option>
-                    <option value={UserRole.ASSISTANT}>🥋 Ajudante (Adiciona alunos e confirma presença)</option>
-                    <option value={UserRole.PROFESSOR}>Professor</option>
-                    <option value={UserRole.ADMIN}>Administrador</option>
-                  </select>
-                  {formData.role === UserRole.ASSISTANT && (
-                    <p className="text-[11px] text-amber-800 bg-amber-50 p-2.5 rounded-lg mt-1 font-medium border border-amber-200">
-                      O Ajudante pode adicionar novos alunos no sistema e confirmar ou registrar a presença de outros alunos nas aulas.
+                    <p className="text-[9px] text-slate-400 leading-relaxed font-semibold">
+                      Nota: Se o aluno mudou a senha padrão dele, precisamos da senha atual para autorizar a alteração do e-mail de login ou redefinição da senha diretamente pelo applet cliente do Firebase.
                     </p>
-                  )}
-                </div>
-              ) : currentUser?.role === UserRole.ASSISTANT ? (
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Função / Perfil</label>
-                  <div className="w-full bg-slate-100 border border-slate-200 rounded-xl py-3.5 px-4 text-sm text-slate-700 font-semibold flex items-center justify-between">
-                    <span>Aluno</span>
-                    <span className="text-[10px] text-slate-500 font-medium bg-white px-2 py-0.5 rounded border border-slate-200">Adicionado por Ajudante</span>
                   </div>
-                </div>
-              ) : null}
+                )}
 
-              {isAdminUser && (
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Situação da Matrícula (Status)</label>
-                  <select 
-                    className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-base transition-all text-slate-900 font-medium appearance-none"
-                    value={formData.status}
-                    onChange={e => {
-                      const statusVal = e.target.value as any;
-                      setFormData({
-                        ...formData, 
-                        status: statusVal, 
-                        isApproved: statusVal === 'active',
-                        suspensionReason: statusVal === 'active' ? '' : (formData.suspensionReason || 'Inadimplência')
-                      });
-                    }}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmResetPassword(true)}
+                    disabled={isResettingPassword || isSendingResetEmail}
+                    className="flex-1 min-w-[200px] bg-slate-800 text-white rounded-xl py-2.5 px-4 text-xs font-bold hover:bg-slate-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 cursor-pointer"
                   >
-                    <option value="active">Ativo (Active)</option>
-                    <option value="inactive">Matrícula Suspensa / Inativo</option>
-                    <option value="pending">Pendente (Pending)</option>
-                    <option value="blocked">Bloqueado (Blocked)</option>
+                    {isResettingPassword && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    <span>Redefinir Senha para Padrão (123456)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSendResetEmail}
+                    disabled={isResettingPassword || isSendingResetEmail}
+                    className="flex-1 min-w-[200px] bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl py-2.5 px-4 text-xs font-bold hover:bg-indigo-100 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 cursor-pointer"
+                  >
+                    {isSendingResetEmail && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    <span>Enviar Link de Redefinição por E-mail</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Data de Nascimento</label>
+              <input 
+                type="date"
+                required
+                className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium"
+                value={formData.birthDate}
+                onChange={e => setFormData({...formData, birthDate: e.target.value})}
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Data de Matrícula</label>
+              <input 
+                type="date"
+                required
+                className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium"
+                value={formData.enrollmentDate}
+                onChange={e => setFormData({...formData, enrollmentDate: e.target.value})}
+              />
+            </div>
+
+            {formData.role === UserRole.STUDENT && (
+              <>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Última Graduação</label>
+                  <select 
+                    className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium appearance-none"
+                    value={formData.currentGrade}
+                    onChange={e => setFormData({...formData, currentGrade: e.target.value})}
+                  >
+                    {['Branca', 'Cinza', 'Cinza ponta azul', 'Azul', 'Azul ponta amarela', 'Amarela', 'Amarela ponta laranja', 'Laranja', 'Verde', 'Roxa', 'Marrom', 'Preta'].map(g => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
                   </select>
                 </div>
-              )}
 
-              {isAdminUser && (formData.status === 'inactive' || formData.status === 'blocked' || formData.status === 'suspended') && (
-                <div className="md:col-span-2 p-4 bg-rose-50 border border-rose-200 rounded-2xl space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-wider text-rose-700 block">
-                    Motivo da Suspensão / Inativação (Exibido para o Aluno)
-                  </label>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Data da Última Graduação</label>
                   <input 
-                    type="text"
-                    placeholder="Ex: Inadimplência, Afastamento Médico, Solicitação do Aluno..."
-                    className="w-full bg-white border border-rose-200 focus:border-rose-500 rounded-xl py-2.5 px-3.5 outline-none text-sm font-semibold text-rose-950"
-                    value={formData.suspensionReason}
-                    onChange={e => setFormData({ ...formData, suspensionReason: e.target.value })}
-                  />
-                  <p className="text-[11px] text-rose-600 font-medium">
-                    Ao tentar acessar o aplicativo, o aluno verá o aviso de matrícula suspensa e a mensagem: "Favor entrar em contato com a secretária do Dojo".
-                  </p>
-                </div>
-              )}
-
-              {(formData.role === UserRole.STUDENT || formData.role === UserRole.ASSISTANT) && (
-                <div className="md:col-span-2 p-5 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
-                  <h4 className="font-bold text-xs text-slate-800 uppercase tracking-wider">Informações do Responsável (Opcional)</h4>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block">Nome do Responsável</label>
-                      <input 
-                        type="text"
-                        placeholder="Nome completo"
-                        className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl py-3 px-4 outline-none text-base md:text-sm transition-all text-slate-900 font-medium"
-                        value={formData.responsibleName || ''}
-                        onChange={e => setFormData({...formData, responsibleName: e.target.value})}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block">Telefone do Responsável</label>
-                      <input 
-                        type="text"
-                        placeholder="(00) 00000-0000"
-                        className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl py-3 px-4 outline-none text-base md:text-sm transition-all text-slate-900 font-medium"
-                        value={formData.responsiblePhone || ''}
-                        onChange={e => setFormData({...formData, responsiblePhone: e.target.value})}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block">E-mail do Responsável</label>
-                      <input 
-                        type="email"
-                        placeholder="email@exemplo.com"
-                        className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl py-3 px-4 outline-none text-base md:text-sm transition-all text-slate-900 font-medium"
-                        value={formData.responsibleEmail || ''}
-                        onChange={e => setFormData({...formData, responsibleEmail: e.target.value})}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {(formData.role === UserRole.STUDENT || formData.role === UserRole.ASSISTANT) && isAdminUser && (
-                <div className="md:col-span-2">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Número de Chamada (Opcional - Anotações Pessoais)</label>
-                  <input 
-                    type="text"
-                    placeholder="Ex: 05, 12, etc. (ajuda a ordenar o aluno conforme suas anotações pessoais)"
-                    className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-base md:text-sm transition-all text-slate-900 font-medium"
-                    value={formData.callNumber}
-                    onChange={e => setFormData({...formData, callNumber: e.target.value})}
+                    type="date"
+                    className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium"
+                    value={formData.lastPromotionDate}
+                    onChange={e => setFormData({...formData, lastPromotionDate: e.target.value})}
                   />
                 </div>
-              )}
+              </>
+            )}
 
+            {isAdminUser && (
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Tipo Sanguíneo</label>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Função</label>
                 <select 
-                  className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-base md:text-sm transition-all text-slate-900 font-medium appearance-none"
-                  value={formData.bloodType}
-                  onChange={e => setFormData({...formData, bloodType: e.target.value})}
+                  className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium appearance-none"
+                  value={formData.role}
+                  onChange={e => setFormData({...formData, role: e.target.value as UserRole})}
                 >
-                  <option value="">Selecione</option>
-                  {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
+                  <option value={UserRole.STUDENT}>Aluno</option>
+                  <option value={UserRole.PROFESSOR}>Professor</option>
+                  <option value={UserRole.ADMIN}>Administrador</option>
                 </select>
               </div>
+            )}
 
+            {isAdminUser && (
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Situação da Matrícula (Status)</label>
+                <select 
+                  className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium appearance-none"
+                  value={formData.status}
+                  onChange={e => {
+                    const statusVal = e.target.value as any;
+                    setFormData({
+                      ...formData, 
+                      status: statusVal, 
+                      isApproved: statusVal === 'active',
+                      suspensionReason: statusVal === 'active' ? '' : (formData.suspensionReason || 'Inadimplência')
+                    });
+                  }}
+                >
+                  <option value="active">Ativo (Active)</option>
+                  <option value="inactive">Matrícula Suspensa / Inativo</option>
+                  <option value="pending">Pendente (Pending)</option>
+                  <option value="blocked">Bloqueado (Blocked)</option>
+                </select>
+              </div>
+            )}
+
+            {isAdminUser && (formData.status === 'inactive' || formData.status === 'blocked' || formData.status === 'suspended') && (
+              <div className="md:col-span-2 p-4 bg-rose-50 border border-rose-200 rounded-2xl space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-wider text-rose-700 block">
+                  Motivo da Suspensão / Inativação (Exibido para o Aluno)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Inadimplência, Afastamento Médico, Solicitação do Aluno..."
+                  className="w-full bg-white border border-rose-200 focus:border-rose-500 rounded-xl py-2.5 px-3.5 outline-none text-sm font-semibold text-rose-950"
+                  value={formData.suspensionReason}
+                  onChange={e => setFormData({ ...formData, suspensionReason: e.target.value })}
+                />
+                <p className="text-[11px] text-rose-600 font-medium">
+                  Ao tentar acessar o aplicativo, o aluno verá o aviso de matrícula suspensa e a mensagem: "Favor entrar em contato com a secretária do Dojo".
+                </p>
+              </div>
+            )}
+
+            {formData.role === UserRole.STUDENT && (
+              <div className="md:col-span-2 p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
+                <h4 className="font-bold text-sm text-slate-800 uppercase tracking-wider">Informações do Responsável (Opcional)</h4>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block">Nome do Responsável</label>
+                    <input 
+                      type="text"
+                      placeholder="Nome completo"
+                      className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl py-3 px-4 outline-none text-sm transition-all text-slate-900 font-medium"
+                      value={formData.responsibleName || ''}
+                      onChange={e => setFormData({...formData, responsibleName: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block">Telefone do Responsável</label>
+                    <input 
+                      type="text"
+                      placeholder="(00) 00000-0000"
+                      className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl py-3 px-4 outline-none text-sm transition-all text-slate-900 font-medium"
+                      value={formData.responsiblePhone || ''}
+                      onChange={e => setFormData({...formData, responsiblePhone: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block">E-mail do Responsável</label>
+                    <input 
+                      type="email"
+                      placeholder="email@exemplo.com"
+                      className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl py-3 px-4 outline-none text-sm transition-all text-slate-900 font-medium"
+                      value={formData.responsibleEmail || ''}
+                      onChange={e => setFormData({...formData, responsibleEmail: e.target.value})}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {formData.role === UserRole.STUDENT && isAdminUser && (
               <div className="md:col-span-2">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Alertas Médicos / Medicamentos</label>
-                <textarea 
-                  className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-base md:text-sm min-h-[80px] transition-all text-slate-900 font-medium"
-                  placeholder="Ex: Alérgico a dipirona, asma..."
-                  value={formData.medications}
-                  onChange={e => setFormData({...formData, medications: e.target.value})}
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Número de Chamada (Opcional - Anotações Pessoais)</label>
+                <input 
+                  type="text"
+                  placeholder="Ex: 05, 12, etc. (ajuda a ordenar o aluno conforme suas anotações pessoais)"
+                  className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium"
+                  value={formData.callNumber}
+                  onChange={e => setFormData({...formData, callNumber: e.target.value})}
                 />
               </div>
+            )}
+
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Tipo Sanguíneo</label>
+              <select 
+                className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm transition-all text-slate-900 font-medium appearance-none"
+                value={formData.bloodType}
+                onChange={e => setFormData({...formData, bloodType: e.target.value})}
+              >
+                <option value="">Selecione</option>
+                {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block ml-1">Alertas Médicos / Medicamentos</label>
+              <textarea 
+                className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl py-3.5 px-4 outline-none text-sm min-h-[80px] transition-all text-slate-900 font-medium"
+                placeholder="Ex: Alérgico a dipirona, asma..."
+                value={formData.medications}
+                onChange={e => setFormData({...formData, medications: e.target.value})}
+              />
             </div>
           </div>
 
-          {/* Sticky footer action buttons */}
-          <div className="px-5 sm:px-8 py-4 bg-slate-50 border-t border-slate-200/80 flex flex-col-reverse sm:flex-row gap-3 shrink-0">
+          <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-slate-100">
             {profile && isAdminUser && (
               <button 
                 type="button" 
                 onClick={() => setShowConfirmDelete(true)}
                 disabled={isDeleting || loading}
-                className="px-4 py-3 font-bold text-rose-500 hover:bg-rose-50 rounded-xl transition-all flex items-center justify-center gap-2 mr-auto active:scale-95 cursor-pointer text-xs"
+                className="px-4 py-3 font-bold text-rose-500 hover:bg-rose-50 rounded-xl transition-all flex items-center justify-center gap-2 mr-auto active:scale-95 cursor-pointer"
               >
                 {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                 <span>Excluir</span>
@@ -1714,20 +1612,19 @@ function MemberModal({ profile, profiles, onClose }: { profile?: Profile | null,
             <button 
               type="button" 
               onClick={onClose} 
-              className="px-6 py-3.5 font-bold text-slate-500 hover:text-slate-700 bg-white sm:bg-transparent border sm:border-transparent border-slate-200 rounded-xl active:scale-95 cursor-pointer text-sm text-center"
+              className="px-6 py-3 font-bold text-slate-400 hover:text-slate-600 active:scale-95 cursor-pointer"
             >
               Cancelar
             </button>
             <button 
-              type="submit"
               disabled={loading || isDeleting}
               className={cn(
-                "flex-1 bg-indigo-600 text-white py-3.5 rounded-xl font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 cursor-pointer text-sm",
+                "flex-1 bg-indigo-600 text-white py-3.5 rounded-xl font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 cursor-pointer",
                 loading ? "opacity-50 cursor-not-allowed" : "hover:bg-indigo-700 shadow-indigo-600/20"
               )}
             >
               {(loading || isDeleting) && <Loader2 className="w-4 h-4 animate-spin" />}
-              <span>{profile ? 'Salvar Alterações' : 'Salvar Cadastro'}</span>
+              {profile ? 'Salvar Alterações' : 'Salvar Cadastro'}
             </button>
           </div>
         </form>
